@@ -11,24 +11,16 @@ import {
   TableCell,
   TableHead,
   TableRow,
-  IconButton,
   Pagination,
   CircularProgress,
   Alert,
   Snackbar,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogContentText,
-  DialogActions,
-  Button,
 } from "@mui/material";
-import DeleteIcon from "@mui/icons-material/Delete";
 import { useParams } from "next/navigation";
 import api from "@/lib/axios";
 import { EnquiryResponse, PagedResult } from "@/lib/types";
 
-export default function AdminPropertyEnquiriesPage() {
+export default function AgentPropertyEnquiriesPage() {
   const { propertyId } = useParams();
   const [enquiries, setEnquiries] =
     useState<PagedResult<EnquiryResponse> | null>(null);
@@ -36,55 +28,24 @@ export default function AdminPropertyEnquiriesPage() {
   const [error, setError] = useState("");
   const [page, setPage] = useState(1);
   const pageSize = 10;
-  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
-  const [snackbar, setSnackbar] = useState<{
-    open: boolean;
-    message: string;
-    severity: "success" | "error";
-  }>({
-    open: false,
-    message: "",
-    severity: "success",
-  });
-
-  const fetchEnquiries = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const res = await api.get(`/api/Enquiry/property/${propertyId}`, {
-        params: { page, size: pageSize },
-      });
-      setEnquiries(res.data.data);
-    } catch (err: any) {
-      setError(err.response?.data?.message || "Failed to load enquiries");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   useEffect(() => {
-    fetchEnquiries();
+    (async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const res = await api.get(`/api/Enquiry/property/${propertyId}`, {
+          params: { page, size: pageSize },
+        });
+        setEnquiries(res.data.data);
+      } catch (err: any) {
+        setError(err.response?.data?.message || "Failed to load enquiries");
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, [page, propertyId]);
 
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    try {
-      await api.delete(`/api/admin/enquiries/${deleteTarget}`);
-      setSnackbar({
-        open: true,
-        message: "Enquiry deleted.",
-        severity: "success",
-      });
-      setDeleteTarget(null);
-      fetchEnquiries();
-    } catch (err: any) {
-      setSnackbar({
-        open: true,
-        message: err.response?.data?.message || "Delete failed",
-        severity: "error",
-      });
-    }
-  };
   return (
     <Container maxWidth="lg">
       <Typography variant="h4" gutterBottom>
@@ -112,7 +73,6 @@ export default function AdminPropertyEnquiriesPage() {
                 <TableCell>Phone</TableCell>
                 <TableCell>Message</TableCell>
                 <TableCell>Date</TableCell>
-                <TableCell align="center">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -133,14 +93,6 @@ export default function AdminPropertyEnquiriesPage() {
                   <TableCell>
                     {new Date(enq.createdAt).toLocaleDateString()}
                   </TableCell>
-                  <TableCell align="center">
-                    <IconButton
-                      color="error"
-                      onClick={() => setDeleteTarget(enq.id)}
-                    >
-                      <DeleteIcon />
-                    </IconButton>
-                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -154,33 +106,6 @@ export default function AdminPropertyEnquiriesPage() {
           </Box>
         </Paper>
       )}
-
-      {/* Delete confirmation dialog */}
-      <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)}>
-        <DialogTitle>Delete Enquiry?</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Are you sure you want to delete this enquiry?
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteTarget(null)}>Cancel</Button>
-          <Button onClick={handleDelete} color="error" variant="contained">
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={4000}
-        onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-      >
-        <Alert severity={snackbar.severity} variant="filled">
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
     </Container>
   );
 }

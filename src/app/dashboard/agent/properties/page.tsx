@@ -22,6 +22,7 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
+  Snackbar,
 } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -37,19 +38,27 @@ export default function AgentPropertiesPage() {
   const [properties, setProperties] =
     useState<PagedResult<PropertyResponse> | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
-  // Delete confirmation
+  // Feedback snackbar
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: "success" | "error";
+  }>({ open: false, message: "", severity: "success" });
+
+  // Delete dialog
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedPropertyId, setSelectedPropertyId] = useState<number | null>(
     null,
   );
 
+  const handleCloseSnackbar = () =>
+    setSnackbar((prev) => ({ ...prev, open: false }));
+
   const fetchProperties = useCallback(async () => {
     setLoading(true);
-    setError("");
     try {
       const res = await api.get("/api/Property/my-properties", {
         params: {
@@ -60,8 +69,14 @@ export default function AgentPropertiesPage() {
         },
       });
       setProperties(res.data.data);
+     
     } catch (err: any) {
-      setError(err.response?.data?.message || "Failed to load properties");
+      console.log(err);
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.message || "Failed to load properties",
+        severity: "error",
+      });
     } finally {
       setLoading(false);
     }
@@ -70,6 +85,8 @@ export default function AgentPropertiesPage() {
   useEffect(() => {
     fetchProperties();
   }, [fetchProperties]);
+
+   console.log(properties);
 
   const handleDeleteClick = (propertyId: number) => {
     setSelectedPropertyId(propertyId);
@@ -80,30 +97,51 @@ export default function AgentPropertiesPage() {
     if (selectedPropertyId === null) return;
     try {
       await api.delete(`/api/Property/${selectedPropertyId}`);
+      setSnackbar({
+        open: true,
+        message: "Property deleted (soft delete).",
+        severity: "success",
+      });
       setDeleteDialogOpen(false);
       setSelectedPropertyId(null);
-      fetchProperties(); // refresh
+      fetchProperties();
     } catch (err: any) {
-      setError(err.response?.data?.message || "Failed to delete property");
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.message || "Failed to delete",
+        severity: "error",
+      });
     }
   };
 
   const toggleActive = async (id: number, currentActive: boolean) => {
     try {
       await api.put(`/api/Property/${id}/toggle-active`);
-      fetchProperties(); // refresh list
+      setSnackbar({
+        open: true,
+        message: `Property ${currentActive ? "deactivated" : "activated"}.`,
+        severity: "success",
+      });
+      fetchProperties();
     } catch (err: any) {
-      setError(err.response?.data?.message || "Failed to toggle status");
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.message || "Toggle failed",
+        severity: "error",
+      });
     }
   };
 
   return (
     <Container maxWidth="lg">
+      {/* Header */}
       <Box
-        display="flex"
-        justifyContent="space-between"
-        alignItems="center"
-        mb={3}
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 3,
+        }}
       >
         <Typography variant="h4">My Properties</Typography>
         <Button
@@ -115,14 +153,9 @@ export default function AgentPropertiesPage() {
         </Button>
       </Box>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
-
+      {/* Loading / Empty / Error handled inline with snackbar for errors */}
       {loading ? (
-        <Box display="flex" justifyContent="center" py={4}>
+        <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
           <CircularProgress />
         </Box>
       ) : !properties || properties.items.length === 0 ? (
@@ -199,7 +232,7 @@ export default function AgentPropertiesPage() {
               ))}
             </TableBody>
           </Table>
-          <Box display="flex" justifyContent="center" p={2}>
+          <Box sx={{ display: "flex", justifyContent: "center", p: 2 }}>
             <Pagination
               count={Math.ceil(properties.totalCount / pageSize)}
               page={page}
@@ -209,7 +242,7 @@ export default function AgentPropertiesPage() {
         </Paper>
       )}
 
-      {/* Delete Confirmation Dialog */}
+      {/* Delete confirmation dialog */}
       <Dialog
         open={deleteDialogOpen}
         onClose={() => setDeleteDialogOpen(false)}
@@ -227,6 +260,23 @@ export default function AgentPropertiesPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Snackbar for feedback */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          onClose={handleCloseSnackbar}
+          severity={snackbar.severity}
+          variant="filled"
+          sx={{ width: "100%" }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 }

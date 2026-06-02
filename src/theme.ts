@@ -1,28 +1,29 @@
+// src/theme.ts
 import { createTheme } from "@mui/material/styles";
 
 const theme = createTheme({
   palette: {
     primary: {
-      main: "#1a3b5d", // deep navy – trustworthy, professional
-      light: "#2f5f8a",
-      dark: "#0f2640",
+      main: "#1e293b", // slate‑800 – deep, confident, professional
+      light: "#334155", // slate‑700
+      dark: "#0f172a", // slate‑900
       contrastText: "#ffffff",
     },
     secondary: {
-      main: "#f59e0b", // amber/gold – call‑to‑action (buttons, highlights)
+      main: "#f59e0b", // warm amber – keeps the inviting call‑to‑action
       light: "#fbbf24",
       dark: "#b45309",
     },
     error: {
-      main: "#d32f2f",
+      main: "#ef4444",
     },
     background: {
-      default: "#f8fafc", // very light grey
-      paper: "#ffffff",
+      default: "#ffffff",
+      paper: "#f8fafc", // very subtle grey for cards and surfaces
     },
     text: {
-      primary: "#1e293b",
-      secondary: "#475569",
+      primary: "#0f172a", // slate‑900 – high contrast on white
+      secondary: "#475569", // slate‑600 – softer secondary text
     },
   },
   typography: {
@@ -38,7 +39,7 @@ const theme = createTheme({
     body2: { fontSize: "0.875rem", lineHeight: 1.6 },
   },
   shape: {
-    borderRadius: 8,
+    borderRadius: 6,
   },
   components: {
     MuiButton: {
@@ -46,17 +47,43 @@ const theme = createTheme({
         root: {
           textTransform: "none",
           fontWeight: 600,
-          padding: "10px 20px",
-          borderRadius: 8,
+          padding: "10px 24px",
+          borderRadius: 12,
+          transition: "all 0.2s ease-in-out",
+          "&:hover": {
+            transform: "scale(1.03)",
+          },
+          "&:active": {
+            transform: "scale(0.98)",
+          },
+        },
+        contained: {
+          background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
+          color: "#ffffff",
+          "&:hover": {
+            background: "linear-gradient(135deg, #0f172a 0%, #020617 100%)",
+          },
+        },
+        outlined: {
+          borderColor: "#1e293b",
+          color: "#1e293b",
+          "&:hover": {
+            borderColor: "#0f172a",
+            backgroundColor: "rgba(30,41,59,0.04)",
+          },
         },
       },
     },
     MuiCard: {
       styleOverrides: {
         root: {
-          borderRadius: 12,
-          boxShadow:
-            "0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px -1px rgba(0,0,0,0.1)",
+          borderRadius: 16,
+          boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+          transition: "transform 0.25s ease, box-shadow 0.25s ease",
+          "&:hover": {
+            transform: "translateY(-6px)",
+            boxShadow: "0 12px 28px rgba(0,0,0,0.12)",
+          },
         },
       },
     },
@@ -65,18 +92,26 @@ const theme = createTheme({
         variant: "outlined",
         size: "small",
       },
+      styleOverrides: {
+        root: {
+          "& .MuiOutlinedInput-root": {
+            borderRadius: 10,
+          },
+        },
+      },
     },
     MuiChip: {
       styleOverrides: {
         root: {
           fontWeight: 500,
+          borderRadius: 8,
         },
       },
     },
     MuiTableHead: {
       styleOverrides: {
         root: {
-          backgroundColor: "#f1f5f9",
+          backgroundColor: "#f1f5f9", // light slate for table headers
         },
       },
     },

@@ -21,7 +21,7 @@ import Link from "next/link";
 import api from "@/lib/axios";
 import { PropertyResponse, PagedResult } from "@/lib/types";
 
-export default function AdminEnquiriesPage() {
+export default function AgentEnquiriesPage() {
   const [properties, setProperties] =
     useState<PagedResult<PropertyResponse> | null>(null);
   const [loading, setLoading] = useState(true);
@@ -41,10 +41,10 @@ export default function AdminEnquiriesPage() {
     (async () => {
       setLoading(true);
       try {
-        const res = await api.get("/api/Property", {
+        const res = await api.get("/api/Property/my-properties", {
           params: {
-            Page: page,
-            PageSize: pageSize,
+            page,
+            size: pageSize,
             SortBy: "CreatedAt",
             IsDescending: true,
           },
@@ -65,10 +65,10 @@ export default function AdminEnquiriesPage() {
   return (
     <Container maxWidth="lg">
       <Typography variant="h4" gutterBottom>
-        Manage Enquiries
+        Enquiries
       </Typography>
       <Typography variant="subtitle1" gutterBottom>
-        Select a property to view and manage its enquiries.
+        Select a property to view its enquiries.
       </Typography>
 
       {loading ? (
@@ -83,7 +83,7 @@ export default function AdminEnquiriesPage() {
             <TableHead>
               <TableRow>
                 <TableCell>Title</TableCell>
-                <TableCell>Agent</TableCell>
+                <TableCell>City</TableCell>
                 <TableCell align="center">Actions</TableCell>
               </TableRow>
             </TableHead>
@@ -91,10 +91,10 @@ export default function AdminEnquiriesPage() {
               {properties.items.map((property) => (
                 <TableRow key={property.id}>
                   <TableCell>{property.title}</TableCell>
-                  <TableCell>{property.agentName}</TableCell>
+                  <TableCell>{property.city}</TableCell>
                   <TableCell align="center">
                     <Link
-                      href={`/dashboard/admin/enquiries/${property.id}`}
+                      href={`/dashboard/agent/enquiries/${property.id}`}
                       passHref
                     >
                       <Button size="small" variant="outlined">

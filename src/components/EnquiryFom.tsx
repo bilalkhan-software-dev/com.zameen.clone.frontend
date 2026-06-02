@@ -2,59 +2,70 @@
 
 import { useState } from "react";
 import {
-  Box,
   TextField,
   Button,
-  Typography,
-  Alert,
+  Box,
   CircularProgress,
+  Snackbar,
+  Alert,
 } from "@mui/material";
-import { useEnquiry } from "@/hooks/useEnquiry";
+import api from "@/lib/axios";
 import { CreateEnquiryRequest } from "@/lib/types";
 
 interface Props {
   propertyId: number;
-  onSuccess?: () => void; // optional callback after successful submission
 }
 
-export default function EnquiryForm({ propertyId, onSuccess }: Props) {
-  const { sendEnquiry, loading, error, success, resetStatus } = useEnquiry();
+export default function EnquiryForm({ propertyId }: Props) {
   const [form, setForm] = useState<Omit<CreateEnquiryRequest, "propertyId">>({
     senderName: "",
     senderEmail: "",
     phone: "",
     message: "",
   });
+  const [loading, setLoading] = useState(false);
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: "success" | "error";
+  }>({ open: false, message: "", severity: "success" });
+
+  const handleChange =
+    (field: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
+      setForm((prev) => ({ ...prev, [field]: e.target.value }));
+    };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    resetStatus();
-    const result = await sendEnquiry({ ...form, propertyId });
-    if (result) {
+    setLoading(true);
+    try {
+      await api.post("/api/Enquiry", { ...form, propertyId });
+      setSnackbar({
+        open: true,
+        message: "Enquiry sent successfully!",
+        severity: "success",
+      });
       setForm({ senderName: "", senderEmail: "", phone: "", message: "" });
-      onSuccess?.();
+    } catch (err: any) {
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.message || "Failed to send enquiry",
+        severity: "error",
+      });
+    } finally {
+      setLoading(false);
     }
   };
-
-  const handleChange =
-    (field: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => {
-      setForm({ ...form, [field]: e.target.value });
-    };
 
   return (
     <Box
       component="form"
       onSubmit={handleSubmit}
-      sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 2 }}
+      sx={{ display: "flex", flexDirection: "column", gap: 2 }}
     >
-      <Typography variant="h6" gutterBottom>
-        Send an Enquiry
-      </Typography>
-
       <TextField
         label="Your Name"
         required
-        fullWidth
         value={form.senderName}
         onChange={handleChange("senderName")}
       />
@@ -62,40 +73,45 @@ export default function EnquiryForm({ propertyId, onSuccess }: Props) {
         label="Email"
         type="email"
         required
-        fullWidth
         value={form.senderEmail}
         onChange={handleChange("senderEmail")}
       />
       <TextField
         label="Phone (optional)"
-        fullWidth
         value={form.phone}
         onChange={handleChange("phone")}
       />
       <TextField
         label="Message"
         required
-        fullWidth
         multiline
         rows={4}
         value={form.message}
         onChange={handleChange("message")}
       />
-
-      {error && <Alert severity="error">{error}</Alert>}
-      {success && <Alert severity="success">Your enquiry has been sent!</Alert>}
-
       <Button
         type="submit"
         variant="contained"
-        size="large"
         disabled={loading}
-        startIcon={
-          loading ? <CircularProgress size={20} color="inherit" /> : null
-        }
+        startIcon={loading ? <CircularProgress size={20} /> : null}
       >
         {loading ? "Sending..." : "Send Enquiry"}
       </Button>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+          severity={snackbar.severity}
+          variant="filled"
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

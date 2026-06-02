@@ -1,4 +1,3 @@
-// app/dashboard/admin/properties/page.tsx
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
@@ -31,11 +30,7 @@ import {
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import api from "@/lib/axios";
-import {
-  PropertyResponse,
-  PagedResult,
-  PropertyFilterParams,
-} from "@/lib/types";
+import { PropertyResponse, PagedResult } from "@/lib/types";
 
 const PROPERTY_STATUSES = ["PENDING", "APPROVED", "REJECTED", "SOLD", "RENTED"];
 
@@ -58,15 +53,25 @@ export default function AdminPropertiesPage() {
     setLoading(true);
     setError("");
     try {
-      const params: PropertyFilterParams = {
-        Page: page,
-        PageSize: pageSize,
-        SortBy: "CreatedAt",
-        IsDescending: true,
-      };
-      if (statusFilter) params.Status = statusFilter;
-      const res = await api.get("/api/Property", { params });
-      setProperties(res.data.data);
+      // Use the admin endpoint to get all properties
+      const res = await api.get("/api/admin/properties", {
+        params: { page, size: pageSize, sortBy: "CreatedAt", isNewest: true },
+      });
+      // if the response is ApiResponse<PagedResult>, res.data.data is the paged result
+      let pagedData = res.data.data;
+      // Apply status filter client‑side (or you can add a parameter if the backend supports it)
+      if (statusFilter) {
+        pagedData = {
+          ...pagedData,
+          items: pagedData.items.filter(
+            (p: PropertyResponse) => p.status === statusFilter,
+          ),
+          totalCount: pagedData.items.filter(
+            (p: PropertyResponse) => p.status === statusFilter,
+          ).length,
+        };
+      }
+      setProperties(pagedData);
     } catch (err: any) {
       setError(err.response?.data?.message || "Failed to load properties");
     } finally {
@@ -86,7 +91,7 @@ export default function AdminPropertiesPage() {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
-      await api.delete(`/api/Property/${deleteTarget}`);
+      await api.delete(`/api/Property/${deleteTarget}`); // soft‑delete via public endpoint
       setDeleteTarget(null);
       fetchProperties();
     } catch (err: any) {
@@ -102,12 +107,11 @@ export default function AdminPropertiesPage() {
   const handleStatusChange = async () => {
     if (!statusTarget) return;
     try {
+      // Use the admin property status update endpoint
       await api.patch(
-        `/api/Property/${statusTarget.id}/status`,
+        `/api/admin/properties/${statusTarget.id}/status`,
         selectedStatus,
-        {
-          headers: { "Content-Type": "application/json" },
-        },
+        { headers: { "Content-Type": "application/json" } },
       );
       setStatusTarget(null);
       fetchProperties();
@@ -186,7 +190,6 @@ export default function AdminPropertiesPage() {
                     />
                   </TableCell>
                   <TableCell align="center">
-                    {/* Always visible "Change Status" button */}
                     <Button
                       size="small"
                       variant="outlined"
@@ -215,6 +218,7 @@ export default function AdminPropertiesPage() {
         </Paper>
       )}
 
+      {/* Delete / Status dialogs unchanged (just the API call inside handleStatusChange changed) */}
       <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)}>
         <DialogTitle>Delete Property?</DialogTitle>
         <DialogContent>

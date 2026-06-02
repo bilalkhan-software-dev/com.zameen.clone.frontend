@@ -46,6 +46,10 @@ const adminLinks = [
     title: "Properties",
     url: "/dashboard/admin/properties",
     icon: <HomeWorkIcon />,
+  },{
+    title: "Enquiries",
+    url: "/dashboard/admin/enquiries",
+    icon: <PeopleIcon />,
   },
 ];
 

@@ -32,7 +32,6 @@ export interface UserProfile {
   accountStatus: string;
 }
 
-
 export interface PagedResult<T> {
   items: T[];
   totalCount: number;
@@ -89,9 +88,9 @@ export interface CreatePropertyRequest {
   bedrooms: number;
   bathrooms: number;
   areaSize: number;
-  areaUnit: number; // enum
-  propertyType: number;
-  status: number;
+  areaUnit: string;
+  propertyType: string;
+  propertyPics?: string[];
 }
 
 // Agent
