@@ -53,13 +53,13 @@ export default function DashboardPage() {
     if (!user) return;
     // Admin stats
     if (user.roles?.includes("Admin")) {
-      // You can create a backend endpoint for admin stats, here we mock or fetch separate endpoints.
+      
       // For demonstration, we set dummy values. In production, create an API like /api/admin/stats
       setStats({ users: 150, agents: 42, properties: 320, enquiries: 89 });
     }
     // Agent stats
     else if (user.roles?.includes("Agent")) {
-      // Fetch agent's own stats (you'd have an endpoint like /api/property/my-properties?stats=true)
+      
       setStats({ properties: 12, enquiries: 34 });
     }
   }, [user]);

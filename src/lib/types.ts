@@ -43,8 +43,9 @@ export interface PagedResult<T> {
 
 export interface PropertyFilterParams {
   City?: string;
-  PropertyType?: string; // enum as string
-  Status?: string; // enum as string
+  Address?: string;
+  PropertyType?: string; 
+  Status?: string;
   MinPrice?: number;
   MaxPrice?: number;
   MinBedrooms?: number;
@@ -56,6 +57,7 @@ export interface PropertyFilterParams {
   PageSize?: number;
   SortBy?: string;
   IsDescending?: boolean;
+   AreaUnit?: string;
 }
 
 export interface PropertyResponse {
@@ -73,8 +75,7 @@ export interface PropertyResponse {
   propertyType: string;
   status: string;
   isActive: boolean;
-  agentName: string;
-  agentId: string;
+  agent: AgentResponse;
   createdAt: string;
   updatedAt: string;
 }
@@ -98,6 +99,7 @@ export interface AgentResponse {
   id: string;
   userId: string;
   agencyName: string;
+  profilePic?: string;
   bio?: string;
   accountStatus: string; // "PENDING" | "APPROVED" | "REJECTED"
   createdAt: string;
@@ -105,7 +107,8 @@ export interface AgentResponse {
 }
 
 export interface UpdateAgentRequest {
-  agencyName: string;
+  agencyName?: string;
+  profilePic?: string;
   bio?: string;
 }
 

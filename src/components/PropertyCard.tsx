@@ -9,6 +9,7 @@ import {
   Chip,
   Stack,
   IconButton,
+  Avatar,
 } from "@mui/material";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
@@ -22,8 +23,14 @@ const formatPrice = (price: number) =>
     maximumFractionDigits: 0,
   }).format(price);
 
-export default function PropertyCard({ property }: { property: PropertyResponse }) {
-  const pics = property.propertyPics?.length ? property.propertyPics : ["/placeholder-property.jpg"];
+export default function PropertyCard({
+  property,
+}: {
+  property: PropertyResponse;
+}) {
+  const pics = property.propertyPics?.length
+    ? property.propertyPics
+    : ["/placeholder-property.jpg"];
   const [currentIndex, setCurrentIndex] = useState(0);
 
   const goToPrev = (e: React.MouseEvent) => {
@@ -39,132 +46,166 @@ export default function PropertyCard({ property }: { property: PropertyResponse 
   };
 
   return (
-    <Card
-      sx={{
-        height: "100%",
-        display: "flex",
-        flexDirection: "column",
-        borderRadius: 3,
-        boxShadow: 3,
-        position: "relative",
-        overflow: "visible",
-      }}
+    <Link
+      href={`/property/${property.id}`}
+      style={{ textDecoration: "none", height: "100%" }}
     >
-      {/* Image Slider Container */}
-      <Box sx={{ position: "relative", height: 200, overflow: "hidden" }}>
-        <CardMedia
-          component="img"
-          height="200"
-          image={pics[currentIndex]}
-          alt={`${property.title} - image ${currentIndex + 1}`}
-          sx={{ objectFit: "cover", transition: "opacity 0.3s ease" }}
-        />
+      <Card
+        sx={{
+          height: "100%",
+          display: "flex",
+          flexDirection: "column",
+          borderRadius: 3,
+          boxShadow: 3,
+          position: "relative",
+          overflow: "visible",
+          cursor: "pointer",
+          transition: "transform 0.2s, box-shadow 0.2s",
+          "&:hover": {
+            transform: "translateY(-4px)",
+            boxShadow: 6,
+          },
+        }}
+      >
+        {/* Image Slider Container */}
+        <Box sx={{ position: "relative", height: 200, overflow: "hidden" }}>
+          <CardMedia
+            component="img"
+            height="200"
+            image={pics[currentIndex]}
+            alt={`${property.title} - image ${currentIndex + 1}`}
+            sx={{ objectFit: "cover", transition: "opacity 0.3s ease" }}
+          />
 
-        {/* Left/Right Arrows (visible on hover) */}
-        {pics.length > 1 && (
-          <>
-            <IconButton
-              onClick={goToPrev}
-              size="small"
+          {/* Left/Right Arrows (visible on hover) */}
+          {pics.length > 1 && (
+            <>
+              <IconButton
+                onClick={goToPrev}
+                size="small"
+                sx={{
+                  position: "absolute",
+                  left: 8,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  bgcolor: "rgba(255,255,255,0.8)",
+                  opacity: 0,
+                  transition: "opacity 0.2s",
+                  "&:hover": { bgcolor: "white" },
+                  ".MuiCard-root:hover &": { opacity: 1 },
+                }}
+              >
+                <ChevronLeftIcon fontSize="small" />
+              </IconButton>
+              <IconButton
+                onClick={goToNext}
+                size="small"
+                sx={{
+                  position: "absolute",
+                  right: 8,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  bgcolor: "rgba(255,255,255,0.8)",
+                  opacity: 0,
+                  transition: "opacity 0.2s",
+                  "&:hover": { bgcolor: "white" },
+                  ".MuiCard-root:hover &": { opacity: 1 },
+                }}
+              >
+                <ChevronRightIcon fontSize="small" />
+              </IconButton>
+            </>
+          )}
+
+          {/* Dot Indicators */}
+          {pics.length > 1 && (
+            <Box
               sx={{
                 position: "absolute",
-                left: 8,
-                top: "50%",
-                transform: "translateY(-50%)",
-                bgcolor: "rgba(255,255,255,0.8)",
-                opacity: 0,
-                transition: "opacity 0.2s",
-                "&:hover": { bgcolor: "white" },
-                ".MuiCard-root:hover &": { opacity: 1 },
+                bottom: 8,
+                left: "50%",
+                transform: "translateX(-50%)",
+                display: "flex",
+                gap: 0.5,
               }}
             >
-              <ChevronLeftIcon fontSize="small" />
-            </IconButton>
-            <IconButton
-              onClick={goToNext}
-              size="small"
-              sx={{
-                position: "absolute",
-                right: 8,
-                top: "50%",
-                transform: "translateY(-50%)",
-                bgcolor: "rgba(255,255,255,0.8)",
-                opacity: 0,
-                transition: "opacity 0.2s",
-                "&:hover": { bgcolor: "white" },
-                ".MuiCard-root:hover &": { opacity: 1 },
-              }}
-            >
-              <ChevronRightIcon fontSize="small" />
-            </IconButton>
-          </>
-        )}
+              {pics.map((_, idx) => (
+                <Box
+                  key={idx}
+                  sx={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    backgroundColor:
+                      idx === currentIndex ? "white" : "rgba(255,255,255,0.5)",
+                    transition: "background-color 0.2s",
+                  }}
+                />
+              ))}
+            </Box>
+          )}
+        </Box>
 
-        {/* Dot Indicators */}
-        {pics.length > 1 && (
+        <CardContent sx={{ flexGrow: 1 }}>
+          <Typography variant="h6" component="div" gutterBottom noWrap>
+            {property.title}
+          </Typography>
+          <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
+            <Chip label={property.propertyType} size="small" color="primary" />
+          </Stack>
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            {property.city} – {property.address}
+          </Typography>
+          <Typography variant="h6" color="primary" sx={{ mb: 1 }}>
+            {formatPrice(property.price)}
+          </Typography>
+          <Stack direction="row" spacing={2}>
+            <Typography variant="body2">
+              <strong>{property.bedrooms}</strong> Beds
+            </Typography>
+            <Typography variant="body2">
+              <strong>{property.bathrooms}</strong> Baths
+            </Typography>
+            <Typography variant="body2">
+              <strong>{property.areaSize}</strong> {property.areaUnit}
+            </Typography>
+          </Stack>
+
+          {/* Agent Info */}
           <Box
             sx={{
-              position: "absolute",
-              bottom: 8,
-              left: "50%",
-              transform: "translateX(-50%)",
+              mt: 2,
               display: "flex",
-              gap: 0.5,
+              alignItems: "center",
+              gap: 1,
             }}
           >
-            {pics.map((_, idx) => (
-              <Box
-                key={idx}
-                sx={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: "50%",
-                  backgroundColor: idx === currentIndex ? "white" : "rgba(255,255,255,0.5)",
-                  transition: "background-color 0.2s",
-                }}
-              />
-            ))}
+            <Avatar
+              src={property.agent?.profilePic || undefined}
+              alt={property.agent?.agencyName || "Agent"}
+              sx={{ width: 28, height: 28 }}
+            >
+              {property.agent?.agencyName?.[0]?.toUpperCase() || "A"}
+            </Avatar>
+            <Typography variant="caption" color="text.secondary">
+              {property.agent?.agencyName || "Unknown Agent"}
+            </Typography>
           </Box>
-        )}
-      </Box>
+        </CardContent>
 
-      <CardContent sx={{ flexGrow: 1 }}>
-        <Typography variant="h6" component="div" gutterBottom noWrap>
-          {property.title}
-        </Typography>
-        <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
-          <Chip label={property.propertyType} size="small" color="primary" />
-          <Chip label={property.status} size="small" color="secondary" />
-        </Stack>
-        <Typography variant="body2" color="text.secondary" gutterBottom>
-          {property.city} – {property.address}
-        </Typography>
-        <Typography variant="h6" color="primary" sx={{ mb: 1 }}>
-          {formatPrice(property.price)}
-        </Typography>
-        <Stack direction="row" spacing={2}>
-          <Typography variant="body2">
-            <strong>{property.bedrooms}</strong> Beds
-          </Typography>
-          <Typography variant="body2">
-            <strong>{property.bathrooms}</strong> Baths
-          </Typography>
-          <Typography variant="body2">
-            <strong>{property.areaSize}</strong> {property.areaUnit}
-          </Typography>
-        </Stack>
-        <Typography variant="caption" sx={{ mt: 1, display: "block" }}>
-          Agent: {property.agentName}
-        </Typography>
-      </CardContent>
-
-      <Box sx={{ px: 2, pb: 2 }}>
-        <Link href={`/properties/${property.id}`} passHref>
-          <Button variant="contained" fullWidth>
+        {/* View Details Button (kept for convenience) */}
+        <Box sx={{ px: 2, pb: 2 }}>
+          <Button
+            variant="contained"
+            fullWidth
+            component="span" // prevent nested <a> inside <a>; Link wrapping handles navigation
+            onClick={(e) => e.stopPropagation()} // stop Link navigation on button click
+            sx={{ pointerEvents: "none" }} // let the Link handle the click
+          >
             View Details
           </Button>
-        </Link>
-      </Box>
-    </Card>
+        </Box>
+      </Card>
+    </Link>
   );
 }

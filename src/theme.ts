@@ -1,4 +1,3 @@
-// src/theme.ts
 import { createTheme } from "@mui/material/styles";
 
 const theme = createTheme({
@@ -27,7 +26,7 @@ const theme = createTheme({
     },
   },
   typography: {
-    fontFamily: `'Inter', 'Roboto', 'Helvetica', 'Arial', sans-serif`,
+    fontFamily: `'Plus Jakarta Sans', 'Inter', 'Roboto', 'Helvetica', 'Arial', sans-serif`,
     h1: { fontWeight: 700, fontSize: "2.5rem" },
     h2: { fontWeight: 700, fontSize: "2rem" },
     h3: { fontWeight: 600, fontSize: "1.75rem" },

@@ -1,4 +1,3 @@
-// app/(public)/agents/page.tsx
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
@@ -51,7 +50,7 @@ export default function PublicAgentsPage() {
         sx={{
           background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
           color: "white",
-          py: { xs: 6, md: 8 },
+          py: 18,
           textAlign: "center",
         }}
       >
@@ -119,10 +118,17 @@ export default function PublicAgentsPage() {
                       />
                     </Box>
                     <CardContent sx={{ flexGrow: 1, px: 3, pb: 3 }}>
-                      <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }} noWrap>
+                      <Typography
+                        variant="h6"
+                        sx={{ fontWeight: 600, mb: 0.5 }}
+                        noWrap
+                      >
                         {agent.agencyName}
                       </Typography>
-                      <Typography variant="body2" sx={{ color: "text.secondary", mb: 2, minHeight: 40 }}>
+                      <Typography
+                        variant="body2"
+                        sx={{ color: "text.secondary", mb: 2, minHeight: 40 }}
+                      >
                         {agent.bio || "Experienced real‑estate agent"}
                       </Typography>
                       <Chip

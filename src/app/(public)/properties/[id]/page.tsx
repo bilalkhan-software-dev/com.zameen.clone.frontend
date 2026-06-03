@@ -1,4 +1,3 @@
-// app/(public)/property/[id]/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -15,13 +14,14 @@ import {
   Stack,
   Paper,
   IconButton,
+  Avatar,
+  Divider,
 } from "@mui/material";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import api from "@/lib/axios";
 import { PropertyResponse } from "@/lib/types";
 import { useAuth } from "@/context/AuthContext";
-import Image from "next/image";
 import EnquiryForm from "@/components/EnquiryFom";
 
 export default function PropertyDetailPage() {
@@ -74,6 +74,8 @@ export default function PropertyDetailPage() {
     );
   }
 
+  const agent = property.agent;
+
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Title & Status Chips */}
@@ -97,12 +99,15 @@ export default function PropertyDetailPage() {
           boxShadow: 4,
         }}
       >
-        <Image
+        {/* Use plain <img> to avoid next/image remote width/height issues */}
+        <img
           src={pics[activeImageIndex]}
           alt={`${property.title} - ${activeImageIndex + 1}`}
-          fill
-          style={{ objectFit: "cover" }}
-          priority
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+          }}
         />
 
         {pics.length > 1 && (
@@ -213,16 +218,55 @@ export default function PropertyDetailPage() {
             </Typography>
             <Typography sx={{ fontWeight: 600 }}>{property.address}</Typography>
           </Grid>
-          <Grid size={{ xs: 12, sm: 6 }}>
-            <Typography variant="subtitle2" sx={{ color: "text.secondary" }}>
-              Agent
-            </Typography>
-            <Typography sx={{ fontWeight: 600 }}>
-              {property.agentName}
-            </Typography>
-          </Grid>
         </Grid>
       </Paper>
+
+      {/* Agent Card */}
+      {agent && (
+        <Paper elevation={2} sx={{ p: 4, mb: 4 }}>
+          <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+            Listed by
+          </Typography>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <Avatar
+              src={agent.profilePic || undefined}
+              alt={agent.agencyName}
+              sx={{
+                width: 64,
+                height: 64,
+                border: "3px solid",
+                borderColor: "primary.main",
+              }}
+            />
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                {agent.agencyName}
+              </Typography>
+              {agent.bio && (
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mt: 0.5 }}
+                >
+                  {agent.bio}
+                </Typography>
+              )}
+              <Chip
+                label={agent.accountStatus}
+                size="small"
+                color={
+                  agent.accountStatus === "APPROVED"
+                    ? "success"
+                    : agent.accountStatus === "PENDING"
+                      ? "warning"
+                      : "default"
+                }
+                sx={{ mt: 1 }}
+              />
+            </Box>
+          </Box>
+        </Paper>
+      )}
 
       {/* Description */}
       <Paper elevation={2} sx={{ p: 4, mb: 4 }}>

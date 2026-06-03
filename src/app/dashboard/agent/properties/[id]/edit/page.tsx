@@ -239,21 +239,29 @@ export default function EditPropertyPage() {
             <TextField
               label="Bedrooms"
               type="number"
-              required
+              // required
               fullWidth
               value={form.bedrooms ?? ""}
-              onChange={(e) => handleChange("bedrooms", Number(e.target.value))}
+              onChange={(e) =>
+                handleChange(
+                  "bedrooms",
+                  e.target.value === "" ? "" : Number(e.target.value),
+                )
+              }
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               label="Bathrooms"
               type="number"
-              required
+              // required
               fullWidth
               value={form.bathrooms ?? ""}
               onChange={(e) =>
-                handleChange("bathrooms", Number(e.target.value))
+                handleChange(
+                  "bathrooms",
+                  e.target.value === "" ? "" : Number(e.target.value),
+                )
               }
             />
           </Grid>

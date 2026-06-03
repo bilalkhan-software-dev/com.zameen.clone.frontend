@@ -1,4 +1,3 @@
-// components/Navbar.tsx
 "use client";
 
 import { useState } from "react";
@@ -14,15 +13,15 @@ import {
   Divider,
   Avatar,
   Container,
-  useScrollTrigger,
 } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
-import HomeIcon from "@mui/icons-material/Home";
+import HomeIcon from "@mui/icons-material/HomeRounded";
 import ApartmentIcon from "@mui/icons-material/Apartment";
 import PeopleIcon from "@mui/icons-material/People";
 import LoginIcon from "@mui/icons-material/Login";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import DashboardIcon from "@mui/icons-material/Dashboard";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
@@ -30,6 +29,7 @@ import { useRouter } from "next/navigation";
 const Navbar = () => {
   const { user, logout } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [mobileMenuAnchor, setMobileMenuAnchor] = useState<null | HTMLElement>(
     null,
@@ -65,138 +65,107 @@ const Navbar = () => {
       href: "/properties",
       icon: <ApartmentIcon fontSize="small" />,
     },
-     {
-    label: "Agents",               // ← now always visible
-    href: "/agents",
-    icon: <PeopleIcon fontSize="small" />,
-  },
+    { label: "Agents", href: "/agents", icon: <PeopleIcon fontSize="small" /> },
   ];
-  if (isAdmin) {
-    navItems.push({
-      label: "Agents",
-      href: "/agents",
-      icon: <PeopleIcon fontSize="small" />,
-    });
-  }
-
-  // Scroll-triggered background for the whole navbar (optional)
-  const trigger = useScrollTrigger({
-    disableHysteresis: true,
-    threshold: 20,
-  });
 
   return (
     <AppBar
-      position="sticky"
+      position="fixed"
       elevation={0}
       sx={{
-        backgroundColor: trigger ? "rgba(255,255,255,0.75)" : "transparent",
-        backdropFilter: trigger ? "blur(12px)" : "none",
-        boxShadow: "none",
-        transition: "all 0.3s ease",
-        py: 0.5,
+        top: 16,
+        left: "50%",
+        transform: "translateX(-50%)",
+        width: "95%",
+        maxWidth: "1400px",
+        borderRadius: "24px",
+        background: "rgba(255,255,255,0.85)",
+        backdropFilter: "blur(20px)",
+        border: "1px solid rgba(255,255,255,0.3)",
+        boxShadow: "0 10px 40px rgba(0,0,0,0.08)",
+        color: "text.primary",
+        zIndex: 1100,
       }}
     >
       <Container maxWidth="xl">
-        <Toolbar disableGutters sx={{ justifyContent: "space-between" }}>
+        <Toolbar
+          disableGutters
+          sx={{
+            justifyContent: "space-between",
+            minHeight: 80,
+            px: 2,
+          }}
+        >
           {/* Logo */}
-          <Typography
-            variant="h5"
+          <Box
             component={Link}
             href="/"
             sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
               textDecoration: "none",
-              color: "primary.main",
-              fontWeight: 800,
-              letterSpacing: "-0.5px",
             }}
           >
-            PropertyHub
-          </Typography>
+            {/* <HomeIcon sx={{ fontSize: 32, color: "primary.main" }} /> */}
+            <Typography
+              variant="h5"
+              sx={{
+                fontWeight: 900,
+                letterSpacing: "-1px",
+                color: "text.primary",
+              }}
+            >
+              Property
+              <Box component="span" sx={{ color: "primary.main" }}>
+                Hub
+              </Box>
+            </Typography>
+          </Box>
 
-          {/* Desktop: Centered Pill Container */}
+          {/* Centered Pill Navigation */}
           <Box
             sx={{
               display: { xs: "none", md: "flex" },
               alignItems: "center",
-              gap: 0.5,
-              flex: 1,
-              justifyContent: "center",
+              gap: 1,
+              p: 0.8,
+              borderRadius: "999px",
+              background:
+                "linear-gradient(135deg, rgba(255,255,255,.9), rgba(255,255,255,.6))",
+              border: "1px solid rgba(255,255,255,.3)",
+              boxShadow: "0 8px 30px rgba(0,0,0,.06)",
             }}
           >
-            {/* The Pill */}
-            <Box
-              sx={{
-                position: "relative",
-                display: "flex",
-                alignItems: "center",
-                gap: 1,
-                px: 2,
-                py: 1,
-                borderRadius: "50px",
-                backgroundColor: "rgba(255, 255, 255, 0.65)",
-                backdropFilter: "blur(8px)",
-                border: "2px solid transparent",
-                transition: "border-color 0.3s ease, box-shadow 0.3s ease",
-                "&:hover": {
-                  borderColor: "primary.main",
-                  boxShadow: "0 0 15px rgba(59,130,246,0.3)",
-                },
-              }}
-            >
-              {navItems.map((item) => (
-                <Button
-                  key={item.href}
-                  component={Link}
-                  href={item.href}
-                  startIcon={item.icon}
-                  sx={{
-                    borderRadius: "50px",
-                    px: 2.5,
-                    py: 1,
-                    fontWeight: 500,
-                    color: "text.primary",
-                    textTransform: "none",
-                    transition: "all 0.2s ease",
-                    "&:hover": {
-                      backgroundColor: "action.hover",
-                      transform: "translateY(-1px)",
-                    },
-                  }}
-                >
-                  {item.label}
-                </Button>
-              ))}
-
-              {/* Animated SVG Border (inspired by the snippet) */}
-              <Box
-                component="svg"
+            {navItems.map((item) => (
+              <Button
+                key={item.href}
+                component={Link}
+                href={item.href}
+                startIcon={item.icon}
                 sx={{
-                  position: "absolute",
-                  top: -2,
-                  left: -2,
-                  width: "calc(100% + 4px)",
-                  height: "calc(100% + 4px)",
-                  pointerEvents: "none",
-                  "& rect": {
-                    fill: "none",
-                    stroke: "primary.main",
-                    strokeWidth: 2,
-                    strokeDasharray: "0 0 10 40 10 40",
-                    transition: "stroke-dasharray 0.5s ease",
-                  },
-                  ".MuiBox-root:hover & rect": {
-                    strokeDasharray: "0",
+                  px: 2.5,
+                  py: 1,
+                  borderRadius: "999px",
+                  textTransform: "none",
+                  fontWeight: 600,
+                  bgcolor:
+                    pathname === item.href ? "primary.main" : "transparent",
+                  color: pathname === item.href ? "#fff" : "text.primary",
+                  transition: "all .25s ease",
+                  "&:hover": {
+                    transform: "translateY(-2px)",
+                    bgcolor:
+                      pathname === item.href ? "primary.dark" : "action.hover",
                   },
                 }}
-                overflow="visible"
               >
-                <rect rx="50" ry="50" width="100%" height="100%" />
-              </Box>
-            </Box>
+                {item.label}
+              </Button>
+            ))}
           </Box>
 
-          {/* Desktop Auth / Profile Section */}
+          {/* Auth / Profile Section */}
           <Box
             sx={{
               display: { xs: "none", md: "flex" },
@@ -209,15 +178,11 @@ const Navbar = () => {
                 <Button
                   component={Link}
                   href="/login"
-                  startIcon={<LoginIcon />}
                   sx={{
-                    borderRadius: "50px",
+                    borderRadius: "999px",
                     px: 2.5,
-                    py: 1,
-                    fontWeight: 500,
-                    color: "text.primary",
                     textTransform: "none",
-                    "&:hover": { backgroundColor: "action.hover" },
+                    fontWeight: 600,
                   }}
                 >
                   Login
@@ -225,13 +190,11 @@ const Navbar = () => {
                 <Button
                   component={Link}
                   href="/signup"
-                  startIcon={<PersonAddIcon />}
                   variant="contained"
                   sx={{
-                    borderRadius: "50px",
+                    borderRadius: "999px",
                     px: 3,
-                    py: 1,
-                    fontWeight: 600,
+                    fontWeight: 700,
                   }}
                 >
                   Sign Up
@@ -258,16 +221,21 @@ const Navbar = () => {
                 <IconButton onClick={handleProfileMenuOpen} size="small">
                   <Avatar
                     sx={{
-                      width: 36,
-                      height: 36,
-                      bgcolor: "secondary.main",
-                      border: "2px solid",
+                      width: 42,
+                      height: 42,
+                      bgcolor: "primary.main",
+                      border: "3px solid",
                       borderColor: "primary.main",
-                      transition: "transform 0.2s",
-                      "&:hover": { transform: "scale(1.1)" },
+                      boxShadow: "0 0 15px rgba(37,99,235,.25)",
+                      cursor: "pointer",
+                      transition: "all .25s ease",
+
+                      "&:hover": {
+                        transform: "scale(1.08)",
+                      },
                     }}
                   >
-                    {user.fullName?.[0]?.toUpperCase() || "U"}
+                    {user.fullName?.[0]?.toUpperCase()}
                   </Avatar>
                 </IconButton>
                 <Menu
@@ -309,7 +277,7 @@ const Navbar = () => {
                   </MenuItem>
                   <Divider />
                   <MenuItem onClick={handleLogout}>
-                    <Typography color="error" fontWeight={500}>
+                    <Typography color="error" sx={{ fontWeight: 500 }}>
                       Logout
                     </Typography>
                   </MenuItem>
@@ -320,14 +288,24 @@ const Navbar = () => {
 
           {/* Mobile Menu */}
           <Box sx={{ display: { xs: "flex", md: "none" } }}>
-            <IconButton onClick={handleMobileMenuOpen} color="inherit">
+            <IconButton
+              onClick={handleMobileMenuOpen}
+              sx={{
+                display: { xs: "flex", md: "none" },
+                bgcolor: "rgba(255,255,255,.8)",
+
+                "&:hover": {
+                  bgcolor: "rgba(255,255,255,1)",
+                },
+              }}
+            >
               <MenuIcon />
             </IconButton>
             <Menu
               anchorEl={mobileMenuAnchor}
               open={Boolean(mobileMenuAnchor)}
               onClose={handleMenuClose}
-              PaperProps={{ sx: { borderRadius: 3, mt: 1 } }}
+              slotProps={{ paper: { sx: { borderRadius: 3, mt: 1 } } }}
             >
               {navItems.map((item) => (
                 <MenuItem
@@ -385,7 +363,7 @@ const Navbar = () => {
                     </Typography>
                   </MenuItem>
                   <MenuItem onClick={handleLogout}>
-                    <Typography color="error" fontWeight={500}>
+                    <Typography color="error" sx={{ fontWeight: 500 }}>
                       Logout
                     </Typography>
                   </MenuItem>

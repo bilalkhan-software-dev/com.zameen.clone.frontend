@@ -13,11 +13,15 @@ export const useProperties = (
   const [data, setData] = useState<PagedResult<PropertyResponse> | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const refetch = () => setRefreshKey((prev) => prev + 1);
 
   const fetchProperties = async () => {
     setLoading(true);
     setError(null);
     try {
+      // filters object already has all params (City, PropertyType, etc.)
       const res = await api.get("/api/Property", { params: filters });
       setData(res.data.data);
     } catch (err: any) {
@@ -29,7 +33,7 @@ export const useProperties = (
 
   useEffect(() => {
     fetchProperties();
-  }, [filters]);
+  }, [filters, refreshKey]);
 
-  return { data, loading, error, filters, setFilters };
+  return { data, loading, error, filters, setFilters, refetch };
 };
