@@ -9,6 +9,7 @@ export interface RegisterRequest {
   fullName: string;
   isAgency?: boolean;
   agencyName?: string;
+  contactNumber?: string;
   bio?: string;
 }
 
@@ -43,9 +44,9 @@ export interface PagedResult<T> {
 
 export interface PropertyFilterParams {
   City?: string;
-  Address?: string;
-  PropertyType?: string; 
-  Status?: string;
+  Location?: string;
+  PropertyType?: string;
+  PropertyPurpose?: string;
   MinPrice?: number;
   MaxPrice?: number;
   MinBedrooms?: number;
@@ -57,7 +58,24 @@ export interface PropertyFilterParams {
   PageSize?: number;
   SortBy?: string;
   IsDescending?: boolean;
-   AreaUnit?: string;
+}
+
+export interface CreatePropertyRequest {
+  title: string;
+  description: string;
+  price: number;
+  city: string;
+  address: string;
+  location: string; // society/area name
+  latitude: number;
+  longitude: number;
+  bedrooms: number;
+  bathrooms: number;
+  areaSize: number; // will be in square feet (converted from user input)
+  propertyType: string; // "HOUSE", "FLAT", "COMMERCIAL", "SHOP"
+  propertyPurpose: string; // "BUY" or "RENT"
+  propertyPics: string[]; // array of image URLs
+  amenities: Record<string, any>; // JSON object for all amenities
 }
 
 export interface PropertyResponse {
@@ -67,31 +85,21 @@ export interface PropertyResponse {
   price: number;
   city: string;
   address: string;
+  location: string;
   bedrooms: number;
   bathrooms: number;
-  areaSize: number;
-  areaUnit: string;
+  areaSize: number; // in square feet
   propertyPics: string[];
   propertyType: string;
-  status: string;
+  propertyPurpose: string;
+  status: string; // "PENDING", "APPROVED", etc.
   isActive: boolean;
   agent: AgentResponse;
+  latitude: number;
+  longitude: number;
+  amenities: Record<string, any>; // deserialized JSON
   createdAt: string;
   updatedAt: string;
-}
-
-export interface CreatePropertyRequest {
-  title: string;
-  description: string;
-  price: number;
-  city: string;
-  address: string;
-  bedrooms: number;
-  bathrooms: number;
-  areaSize: number;
-  areaUnit: string;
-  propertyType: string;
-  propertyPics?: string[];
 }
 
 // Agent
@@ -102,12 +110,14 @@ export interface AgentResponse {
   profilePic?: string;
   bio?: string;
   accountStatus: string; // "PENDING" | "APPROVED" | "REJECTED"
+  contactNumber?: string;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface UpdateAgentRequest {
   agencyName?: string;
+  contactNumber?: string;
   profilePic?: string;
   bio?: string;
 }

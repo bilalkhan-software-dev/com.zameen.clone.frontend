@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Box,
   Container,
@@ -16,38 +16,29 @@ import {
   Alert,
   Paper,
   Skeleton,
-  ToggleButtonGroup,
-  ToggleButton,
-  Slider,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Autocomplete,
   Chip,
   Collapse,
   Stack,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Slider,
+  RadioGroup,
+  Radio,
+  FormControlLabel,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import TuneIcon from "@mui/icons-material/Tune";
-import StarIcon from "@mui/icons-material/Star";
 import { useProperties } from "@/hooks/useProperties";
 import { PropertyFilterParams } from "@/lib/types";
 import PropertyCard from "@/components/PropertyCard";
 import api from "@/lib/axios";
 
-const PropertyCardSkeleton = () => (
-  <Paper sx={{ borderRadius: 3, overflow: "hidden" }}>
-    <Skeleton variant="rectangular" height={200} />
-    <Box sx={{ p: 2 }}>
-      <Skeleton variant="text" width="80%" />
-      <Skeleton variant="text" width="50%" />
-      <Skeleton variant="text" width="60%" />
-      <Skeleton variant="rectangular" height={36} sx={{ mt: 2 }} />
-    </Box>
-  </Paper>
-);
-
+// ----------------------------------------------------------------------
+// Constants & Helpers
+// ----------------------------------------------------------------------
 const CITIES = [
   "Islamabad",
   "Karachi",
@@ -61,275 +52,304 @@ const CITIES = [
   "Quetta",
 ];
 
+const bedOptions = ["All", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10+"];
+
+const USD_RATE = 0.0036;
+const MAX_PRICE = 500_000_000; // 50 Crore PKR
+
+// Area units with conversion factors to square feet
 const areaUnits = [
-  { value: "SQUARE_FEET", label: "Square Feet", factor: 1 },
-  { value: "SQUARE_YARDS", label: "Square Yards", factor: 9 },
-  { value: "SQUARE_METERS", label: "Square Meters", factor: 10.764 },
+  { value: "SQUARE_FEET", label: "Sq. Ft.", factor: 1 },
+  { value: "SQUARE_YARDS", label: "Sq. Yd.", factor: 9 },
+  { value: "SQUARE_METERS", label: "Sq. M.", factor: 10.764 },
   { value: "MARLA", label: "Marla", factor: 272.25 },
   { value: "KANAL", label: "Kanal", factor: 5445 },
 ];
 
-const bedOptions = ["All", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10+"];
+// Preset values in square feet (used for quick buttons)
+const areaPresetsSqFt = [0, 500, 1000, 2000, 5000, 10000];
 
-const propertyTypeOptions = ["HOUSE", "FLAT", "COMMERCIAL", "SHOP"];
+function useDebounce<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const handler = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(handler);
+  }, [value, delay]);
+  return debounced;
+}
+
+const PropertyCardSkeleton = () => (
+  <Paper sx={{ borderRadius: 2, overflow: "hidden" }}>
+    <Skeleton variant="rectangular" height={200} />
+    <Box sx={{ p: 2 }}>
+      <Skeleton variant="text" width="80%" />
+      <Skeleton variant="text" width="50%" />
+      <Skeleton variant="text" width="60%" />
+      <Skeleton variant="rectangular" height={36} sx={{ mt: 1 }} />
+    </Box>
+  </Paper>
+);
 
 export default function Home() {
-  const { data, loading, error, filters, setFilters, refetch } = useProperties({
+  const { data, loading, error, setFilters, refetch } = useProperties({
     Page: 1,
     PageSize: 9,
     SortBy: "CreatedAt",
     IsDescending: true,
   });
 
-  // ── Local UI states ──────────────────────────
+  // UI state
   const [currencyUI, setCurrencyUI] = useState<"PKR" | "USD">("PKR");
-  const [areaUnitUI, setAreaUnitUI] = useState("SQUARE_FEET");
-  const [areaMinInput, setAreaMinInput] = useState<string>("");
-  const [areaMaxInput, setAreaMaxInput] = useState<string>("");
-  const [bedSelection, setBedSelection] = useState<string>("All");
   const [showMoreOptions, setShowMoreOptions] = useState(false);
-
-  // Modals
   const [currencyModalOpen, setCurrencyModalOpen] = useState(false);
   const [areaUnitModalOpen, setAreaUnitModalOpen] = useState(false);
+  const [selectedAreaUnit, setSelectedAreaUnit] = useState(areaUnits[0]); // default Sq. Ft.
 
-  // Price slider local state
-  const [priceMin, setPriceMin] = useState<number | undefined>(undefined);
-  const [priceMax, setPriceMax] = useState<number | undefined>(undefined);
+  // Local filter state (only applied on Find)
+  const [localCity, setLocalCity] = useState<string | null>("Gujranwala");
+  const [localLocations, setLocalLocations] = useState<string[]>([]);
+  const [localPropertyType, setLocalPropertyType] = useState<string | null>(
+    "HOUSE",
+  );
+  const [localPropertyPurpose, setLocalPropertyPurpose] = useState<
+    "BUY" | "RENT" | null
+  >("BUY");
+  const [localPriceMin, setLocalPriceMin] = useState<number>(0);
+  const [localPriceMax, setLocalPriceMax] = useState<number>(MAX_PRICE);
+  const [localAreaMin, setLocalAreaMin] = useState<number>(0);
+  const [localAreaMax, setLocalAreaMax] = useState<number>(10000);
+  const [localBeds, setLocalBeds] = useState<string>("All");
+  const [localSearchTerm, setLocalSearchTerm] = useState<string>("");
+  const [clientTypeFilter, setClientTypeFilter] = useState<string | null>(
+    "HOUSE",
+  );
 
-  // Multi‑location state
-  const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
+  // Location suggestions
+  const [locationInput, setLocationInput] = useState("");
   const [locationOptions, setLocationOptions] = useState<string[]>([]);
+  const debouncedLocation = useDebounce(locationInput, 300);
 
-  // Client‑side property type filter
-  const [clientTypeFilter, setClientTypeFilter] = useState<string | null>(null);
-
-  // Derived area factor
-  const areaFactor = areaUnits.find((u) => u.value === areaUnitUI)?.factor || 1;
-
-  // ── Handlers ─────────────────────────────────
-  const handleChange = (key: keyof PropertyFilterParams, value: any) => {
-    setFilters((prev) => ({ ...prev, [key]: value, Page: 1 }));
-  };
-
-  const handleSearch = () => refetch();
-
-  const handleReset = () => {
-    setFilters({
-      Page: 1,
-      PageSize: 9,
-      SortBy: "CreatedAt",
-      IsDescending: true,
-    });
-    setPriceMin(undefined);
-    setPriceMax(undefined);
-    setAreaMinInput("");
-    setAreaMaxInput("");
-    setAreaUnitUI("SQUARE_FEET");
-    setCurrencyUI("PKR");
-    setBedSelection("All");
-    setSelectedLocations([]);
-    setClientTypeFilter(null);
-    refetch();
-  };
-
-  // Buy / Rent toggle
-  const handleBuyRent = (_: React.MouseEvent, newStatus: string | null) => {
-    setFilters((prev) => ({
-      ...prev,
-      Status:
-        newStatus === "BUY"
-          ? "APPROVED"
-          : newStatus === "RENT"
-            ? "RENTED"
-            : undefined,
-      Page: 1,
-    }));
-  };
-
-  // Beds dropdown
-  const handleBedChange = (event: SelectChangeEvent<string>) => {
-    const value = event.target.value;
-    setBedSelection(value);
-    if (value === "All") {
-      setFilters((prev) => ({
-        ...prev,
-        MinBedrooms: undefined,
-        MaxBedrooms: undefined,
-        Page: 1,
-      }));
-    } else if (value === "10+") {
-      setFilters((prev) => ({
-        ...prev,
-        MinBedrooms: 10,
-        MaxBedrooms: undefined,
-        Page: 1,
-      }));
-    } else {
-      const num = parseInt(value, 10);
-      setFilters((prev) => ({
-        ...prev,
-        MinBedrooms: num,
-        MaxBedrooms: num,
-        Page: 1,
-      }));
-    }
-  };
-
-  // Area filter: convert UI units to sqft and store in filters
-  const applyAreaFilter = (minStr: string, maxStr: string) => {
-    const min = parseFloat(minStr) || undefined;
-    const max = parseFloat(maxStr) || undefined;
-    setFilters((prev) => ({
-      ...prev,
-      MinAreaSize: min !== undefined ? min * areaFactor : undefined,
-      MaxAreaSize: max !== undefined ? max * areaFactor : undefined,
-      Page: 1,
-    }));
-  };
-
-  // Price filter
-  const applyPriceFilter = (min?: number, max?: number) => {
-    setFilters((prev) => ({
-      ...prev,
-      MinPrice: min !== undefined ? min : undefined,
-      MaxPrice: max !== undefined ? max : undefined,
-      Page: 1,
-    }));
-  };
-
-  // Location filter (multi‑select)
-  const updateLocationFilter = (locs: string[]) => {
-    setSelectedLocations(locs);
-    handleChange("Address", locs.join(", "));
-  };
-
-  // Fetch location suggestions when city changes
+  // Fetch location suggestions
   useEffect(() => {
-    if (!filters.City) {
+    if (!localCity || !debouncedLocation) {
       setLocationOptions([]);
       return;
     }
     const fetchLocations = async () => {
       try {
         const res = await api.get("/api/Property/locations", {
-          params: { city: filters.City },
+          params: {
+            city: localCity,
+            searchTerm: debouncedLocation,
+            page: 1,
+            size: 10,
+          },
         });
-        setLocationOptions(res.data);
+        setLocationOptions(res.data.items || []);
       } catch (err) {
-        console.error("Failed to fetch locations", err);
+        console.error("Location suggestions failed", err);
       }
     };
     fetchLocations();
-  }, [filters.City]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localCity, debouncedLocation]);
 
-  // Currency display
+  const logSearch = async () => {
+    const locationToLog = localLocations[0] || (localCity ? localCity : null);
+    if (!locationToLog) return;
+    try {
+      await api.post("/api/searchlog", {
+        location: locationToLog,
+        city: localCity || undefined,
+        propertyType: localPropertyType || undefined,
+        propertyPurpose: localPropertyPurpose || undefined,
+      });
+    } catch (err) {
+      console.debug("Failed to log search", err);
+    }
+  };
+
+  const handleSearch = () => {
+    logSearch();
+    const minAreaSqFt = localAreaMin * selectedAreaUnit.factor;
+    const maxAreaSqFt = localAreaMax * selectedAreaUnit.factor;
+
+    const newFilters: Partial<PropertyFilterParams> = {
+      Page: 1,
+      PageSize: 9,
+      SortBy: "CreatedAt",
+      IsDescending: true,
+      City: localCity || undefined,
+      Location: localLocations.length > 0 ? localLocations[0] : undefined,
+      PropertyType:
+        localPropertyType === "HOUSE"
+          ? undefined
+          : localPropertyType || undefined,
+      PropertyPurpose: localPropertyPurpose || undefined,
+      MinPrice: localPriceMin === 0 ? undefined : localPriceMin,
+      MaxPrice: localPriceMax === MAX_PRICE ? undefined : localPriceMax,
+      MinAreaSize: localAreaMin === 0 ? undefined : minAreaSqFt,
+      MaxAreaSize: localAreaMax === 10000 ? undefined : maxAreaSqFt,
+      SearchTerm: localSearchTerm || undefined,
+    };
+    if (localBeds === "All") {
+      newFilters.MinBedrooms = undefined;
+      newFilters.MaxBedrooms = undefined;
+    } else if (localBeds === "10+") {
+      newFilters.MinBedrooms = 10;
+      newFilters.MaxBedrooms = undefined;
+    } else {
+      const num = parseInt(localBeds, 10);
+      newFilters.MinBedrooms = num;
+      newFilters.MaxBedrooms = num;
+    }
+    setFilters(newFilters);
+    refetch();
+  };
+
+  const handleReset = () => {
+    setLocalCity("Gujranwala");
+    setLocalLocations([]);
+    setLocalPropertyType("HOUSE");
+    setLocalPropertyPurpose("BUY");
+    setLocalPriceMin(0);
+    setLocalPriceMax(MAX_PRICE);
+    setLocalAreaMin(0);
+    setLocalAreaMax(10000);
+    setLocalBeds("All");
+    setLocalSearchTerm("");
+    setClientTypeFilter("HOUSE");
+    setLocationInput("");
+    setSelectedAreaUnit(areaUnits[0]);
+    setFilters({
+      Page: 1,
+      PageSize: 9,
+      SortBy: "CreatedAt",
+      IsDescending: true,
+      City: "Gujranwala",
+      Location: undefined,
+      PropertyType: undefined,
+      PropertyPurpose: "BUY",
+      MinPrice: undefined,
+      MaxPrice: undefined,
+      MinBedrooms: undefined,
+      MaxBedrooms: undefined,
+      MinAreaSize: undefined,
+      MaxAreaSize: undefined,
+      SearchTerm: "",
+    });
+    refetch();
+  };
+
+  const handleBuyRent = (value: string | null) => {
+    if (value === "BUY") setLocalPropertyPurpose("BUY");
+    else if (value === "RENT") setLocalPropertyPurpose("RENT");
+    else setLocalPropertyPurpose(null);
+  };
+
   const formatPrice = (price: number) => {
-    const rate = currencyUI === "USD" ? 0.0036 : 1;
+    const converted = currencyUI === "USD" ? price * USD_RATE : price;
     const symbol = currencyUI === "USD" ? "$" : "PKR";
-    const converted = price * rate;
-    if (converted >= 10000000)
-      return `${symbol} ${(converted / 10000000).toFixed(1)}Cr`;
-    if (converted >= 100000)
-      return `${symbol} ${(converted / 100000).toFixed(1)}L`;
+    if (converted >= 10_000_000)
+      return `${symbol} ${(converted / 10_000_000).toFixed(1)}Cr`;
+    if (converted >= 100_000)
+      return `${symbol} ${(converted / 100_000).toFixed(1)}L`;
     return `${symbol} ${converted.toLocaleString()}`;
   };
 
-  // Client‑side filtering
   const displayItems = useMemo(() => {
     if (!data?.items) return [];
     if (!clientTypeFilter) return data.items;
     return data.items.filter((p) => p.propertyType === clientTypeFilter);
   }, [data, clientTypeFilter]);
 
+  const buyRentValue =
+    localPropertyPurpose === "BUY"
+      ? "BUY"
+      : localPropertyPurpose === "RENT"
+        ? "RENT"
+        : null;
+
+  // Area preset handlers
+  const setAreaMinPreset = (val: number) => setLocalAreaMin(val);
+  const setAreaMaxPreset = (val: number) => setLocalAreaMax(val);
+
   return (
     <Box sx={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
       {/* Hero Section */}
       <Box
         sx={{
-          background: "linear-gradient(135deg, #1a3b5d 0%, #0f2640 100%)",
-          color: "white",
-          pt: { xs: 12, md: 14 },
-          pb: { xs: 6, md: 8 },
           position: "relative",
-          overflow: "hidden",
-        }}
-      >
-        <Box
-          sx={{
+          pt: 28,
+          pb: { xs: 5, md: 6 },
+          backgroundImage: "url('/real-estate-bg.jpg')",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          "&::before": {
+            content: '""',
             position: "absolute",
             top: 0,
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundImage: "url('/real-estate.jpg')",
-            backgroundSize: "cover",
-            opacity: 0.1,
-          }}
-        />
+            backgroundColor: "rgba(0,0,0,0.55)",
+          },
+        }}
+      >
         <Container maxWidth="lg" sx={{ position: "relative", zIndex: 1 }}>
           <Typography
-            variant="h2"
+            variant="h3"
             sx={{
-              fontWeight: 800,
-              fontSize: { xs: "2rem", md: "3rem" },
+              fontWeight: 700,
+              fontSize: { xs: "2rem", md: "2.8rem" },
               textAlign: "center",
-              mb: 2,
+              color: "white",
+              mb: 1,
             }}
           >
-            Find Your Dream Property
-          </Typography>
-          <Typography
-            variant="h6"
-            sx={{
-              opacity: 0.9,
-              maxWidth: 600,
-              mx: "auto",
-              mb: 4,
-              textAlign: "center",
-            }}
-          >
-            Search thousands of properties for sale and rent across Pakistan
+            Search properties for sale in Pakistan
           </Typography>
 
-          {/* Main Search Bar */}
-          <Paper
-            elevation={6}
-            sx={{ p: 2, borderRadius: 4, maxWidth: 900, mx: "auto" }}
-          >
-            <Box sx={{ mb: 2 }}>
-              <ToggleButtonGroup
-                value={
-                  filters.Status === "APPROVED"
-                    ? "BUY"
-                    : filters.Status === "RENTED"
-                      ? "RENT"
-                      : null
-                }
-                exclusive
-                onChange={handleBuyRent}
-                size="small"
-              >
-                <ToggleButton value="BUY" sx={{ textTransform: "none", px: 3 }}>
+          <Paper elevation={3} sx={{ p: 2, borderRadius: 3, mt: 4 }}>
+            {/* Buy/Rent Toggle */}
+            <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
+              <Box sx={{ display: "flex", gap: 2 }}>
+                <Button
+                  variant={buyRentValue === "BUY" ? "contained" : "outlined"}
+                  onClick={() => handleBuyRent("BUY")}
+                  sx={{
+                    textTransform: "none",
+                    borderRadius: 2,
+                    px: 4,
+                    py: 0.75,
+                  }}
+                >
                   Buy
-                </ToggleButton>
-                <ToggleButton
-                  value="RENT"
-                  sx={{ textTransform: "none", px: 3 }}
+                </Button>
+                <Button
+                  variant={buyRentValue === "RENT" ? "contained" : "outlined"}
+                  onClick={() => handleBuyRent("RENT")}
+                  sx={{
+                    textTransform: "none",
+                    borderRadius: 2,
+                    px: 4,
+                    py: 0.75,
+                  }}
                 >
                   Rent
-                </ToggleButton>
-              </ToggleButtonGroup>
+                </Button>
+              </Box>
             </Box>
 
-            <Grid container spacing={2} alignItems="center">
+            <Grid container spacing={2}>
+              {/* City */}
               <Grid size={{ xs: 12, sm: 6, md: 2.5 }}>
                 <Autocomplete
                   freeSolo
                   options={CITIES}
-                  value={filters.City || ""}
+                  value={localCity || ""}
                   onInputChange={(_, newValue) =>
-                    handleChange("City", newValue)
+                    setLocalCity(newValue || null)
                   }
                   renderInput={(params) => (
                     <TextField {...params} label="City" size="small" />
@@ -337,40 +357,39 @@ export default function Home() {
                 />
               </Grid>
 
-              <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              {/* Location (multiple chips) */}
+              <Grid size={{ xs: 12, sm: 6, md: 3.5 }}>
                 <Autocomplete
                   multiple
+                  freeSolo
                   options={locationOptions}
-                  value={selectedLocations}
-                  onChange={(_, newValue) => updateLocationFilter(newValue)}
-                  renderInput={(params) => (
-                    <TextField {...params} label="Location" size="small" />
-                  )}
-                  renderTags={(value, getTagProps) =>
-                    value.map((option, index) => (
-                      <Chip
-                        variant="outlined"
-                        label={option}
-                        size="small"
-                        {...getTagProps({ index })}
-                        key={index}
-                      />
-                    ))
+                  value={localLocations}
+                  onInputChange={(_, newInputValue) =>
+                    setLocationInput(newInputValue)
                   }
+                  onChange={(_, newValue) => setLocalLocations(newValue)}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Location"
+                      size="small"
+                      placeholder="Location"
+                    />
+                  )}
                 />
               </Grid>
 
-              <Grid size={{ xs: 12, sm: 6, md: 2.5 }}>
+              {/* Property Type */}
+              <Grid size={{ xs: 12, sm: 6, md: 2 }}>
                 <FormControl fullWidth size="small">
-                  <InputLabel>Type</InputLabel>
+                  <InputLabel>Property Type</InputLabel>
                   <Select
-                    value={filters.PropertyType || ""}
-                    label="Type"
+                    value={localPropertyType || "HOUSE"}
+                    label="Property Type"
                     onChange={(e) =>
-                      handleChange("PropertyType", e.target.value || undefined)
+                      setLocalPropertyType(e.target.value as string)
                     }
                   >
-                    <MenuItem value="">All</MenuItem>
                     <MenuItem value="HOUSE">House</MenuItem>
                     <MenuItem value="FLAT">Flat</MenuItem>
                     <MenuItem value="COMMERCIAL">Commercial</MenuItem>
@@ -379,34 +398,33 @@ export default function Home() {
                 </FormControl>
               </Grid>
 
+              {/* Find Button */}
               <Grid size={{ xs: 12, sm: 6, md: 2 }}>
                 <Button
                   fullWidth
                   variant="contained"
-                  size="large"
                   onClick={handleSearch}
                   sx={{
                     backgroundColor: "#f59e0b",
                     "&:hover": { backgroundColor: "#d97706" },
-                    borderRadius: 2,
                     textTransform: "none",
                     fontWeight: 600,
+                    py: 0.75,
                   }}
+                  startIcon={<SearchIcon />}
                 >
                   Find
                 </Button>
               </Grid>
 
-              <Grid
-                size={{ xs: 12, md: 2 }}
-                sx={{ textAlign: { xs: "left", md: "right" } }}
-              >
+              {/* More/Less Options */}
+              <Grid size={{ xs: 12, md: 2 }} sx={{ textAlign: "right" }}>
                 <Button
                   size="small"
                   variant="text"
-                  startIcon={<TuneIcon />}
+                  startIcon={<TuneIcon fontSize="small" />}
                   onClick={() => setShowMoreOptions(!showMoreOptions)}
-                  sx={{ textTransform: "none" }}
+                  sx={{ textTransform: "none", color: "#f59e0b" }}
                 >
                   {showMoreOptions ? "Less Options" : "More Options"}
                 </Button>
@@ -416,119 +434,180 @@ export default function Home() {
             <Collapse in={showMoreOptions}>
               <Box
                 sx={{
-                  mt: 3,
+                  mt: 2,
                   pt: 2,
                   borderTop: "1px solid",
                   borderColor: "divider",
                 }}
               >
-                <Grid container spacing={2}>
+                <Grid container spacing={3}>
                   {/* Price Range */}
                   <Grid size={{ xs: 12, md: 6 }}>
-                    <Typography
-                      variant="body2"
-                      sx={{ mb: 0.5, fontWeight: 500 }}
-                    >
+                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
                       Price Range ({currencyUI})
                     </Typography>
                     <Slider
-                      value={[priceMin || 0, priceMax || 500000000]}
-                      onChange={(_, newVal) => {
-                        const [min, max] = newVal as number[];
-                        setPriceMin(min);
-                        setPriceMax(max);
-                        applyPriceFilter(
-                          min === 0 ? undefined : min,
-                          max === 500000000 ? undefined : max,
-                        );
+                      value={[localPriceMin, localPriceMax]}
+                      onChange={(_, newValue) => {
+                        const [min, max] = newValue as number[];
+                        setLocalPriceMin(min);
+                        setLocalPriceMax(max);
                       }}
                       min={0}
-                      max={500000000}
-                      step={1000000}
+                      max={MAX_PRICE}
+                      step={1_000_000}
                       valueLabelDisplay="auto"
-                      valueLabelFormat={(v) => `${(v / 10000000).toFixed(1)}Cr`}
+                      valueLabelFormat={(v) =>
+                        `${(v / 10_000_000).toFixed(1)}Cr`
+                      }
                     />
-                    <Box sx={{ display: "flex", gap: 1, mt: 1 }}>
+                    <Box sx={{ display: "flex", gap: 2, mt: 1 }}>
                       <TextField
+                        label="Min Price"
                         size="small"
-                        label="Min"
                         type="number"
-                        value={priceMin ?? ""}
-                        onChange={(e) => {
-                          const val = e.target.value
-                            ? Number(e.target.value)
-                            : undefined;
-                          setPriceMin(val);
-                          applyPriceFilter(val, priceMax);
-                        }}
+                        value={localPriceMin}
+                        onChange={(e) =>
+                          setLocalPriceMin(Number(e.target.value))
+                        }
+                        fullWidth
                       />
                       <TextField
+                        label="Max Price"
                         size="small"
-                        label="Max"
                         type="number"
-                        value={priceMax ?? ""}
-                        onChange={(e) => {
-                          const val = e.target.value
-                            ? Number(e.target.value)
-                            : undefined;
-                          setPriceMax(val);
-                          applyPriceFilter(priceMin, val);
-                        }}
+                        value={localPriceMax}
+                        onChange={(e) =>
+                          setLocalPriceMax(Number(e.target.value))
+                        }
+                        fullWidth
                       />
+                      <Button
+                        size="small"
+                        variant="text"
+                        onClick={() => setCurrencyModalOpen(true)}
+                      >
+                        Change
+                      </Button>
                     </Box>
                   </Grid>
 
                   {/* Area Range */}
                   <Grid size={{ xs: 12, md: 6 }}>
-                    <Typography
-                      variant="body2"
-                      sx={{ mb: 0.5, fontWeight: 500 }}
-                    >
-                      Area (
-                      {areaUnits.find((u) => u.value === areaUnitUI)?.label})
+                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                      Area ({selectedAreaUnit.label})
                     </Typography>
-                    <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-                      <TextField
-                        size="small"
-                        label="Min"
-                        type="number"
-                        placeholder="0"
-                        value={areaMinInput}
-                        onChange={(e) => {
-                          setAreaMinInput(e.target.value);
-                          applyAreaFilter(e.target.value, areaMaxInput);
+                    <Box sx={{ display: "flex", gap: 2, mb: 1 }}>
+                      <Autocomplete
+                        freeSolo
+                        options={areaPresetsSqFt.map(String)}
+                        value={
+                          localAreaMin === 0 ? "" : localAreaMin.toString()
+                        }
+                        onInputChange={(_, newValue) => {
+                          let num = parseFloat(newValue);
+                          if (isNaN(num)) num = 0;
+                          if (num < 0) num = 0;
+                          setLocalAreaMin(num);
                         }}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            label="Min Area"
+                            size="small"
+                            type="number"
+                          />
+                        )}
+                        fullWidth
                       />
-                      <TextField
-                        size="small"
-                        label="Max"
-                        type="number"
-                        placeholder="Any"
-                        value={areaMaxInput}
-                        onChange={(e) => {
-                          setAreaMaxInput(e.target.value);
-                          applyAreaFilter(areaMinInput, e.target.value);
+                      <Autocomplete
+                        freeSolo
+                        options={areaPresetsSqFt
+                          .filter((v) => v > 0)
+                          .map(String)}
+                        value={
+                          localAreaMax === 10000 ? "" : localAreaMax.toString()
+                        }
+                        onInputChange={(_, newValue) => {
+                          let num = parseFloat(newValue);
+                          if (isNaN(num)) num = 10000;
+                          if (num < 0) num = 0;
+                          setLocalAreaMax(num);
                         }}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            label="Max Area"
+                            size="small"
+                            type="number"
+                          />
+                        )}
+                        fullWidth
                       />
+                    </Box>
+                    {/* Quick preset buttons */}
+                    <Box
+                      sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 1 }}
+                    >
+                      <Typography variant="caption" sx={{ mr: 1 }}>
+                        Min:
+                      </Typography>
+                      {areaPresetsSqFt.map((val) => (
+                        <Button
+                          key={`min-${val}`}
+                          size="small"
+                          variant="outlined"
+                          onClick={() => setAreaMinPreset(val)}
+                          sx={{ minWidth: "auto", px: 1.5 }}
+                        >
+                          {val === 0 ? "0" : val}
+                        </Button>
+                      ))}
                       <Button
                         size="small"
-                        variant="text"
-                        onClick={() => setAreaUnitModalOpen(true)}
-                        sx={{ minWidth: "auto", textTransform: "none" }}
+                        variant="outlined"
+                        onClick={() => setAreaMinPreset(0)}
                       >
-                        Unit
+                        Any
+                      </Button>
+                    </Box>
+                    <Box
+                      sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 1 }}
+                    >
+                      <Typography variant="caption" sx={{ mr: 1 }}>
+                        Max:
+                      </Typography>
+                      {areaPresetsSqFt
+                        .filter((v) => v > 0)
+                        .map((val) => (
+                          <Button
+                            key={`max-${val}`}
+                            size="small"
+                            variant="outlined"
+                            onClick={() => setAreaMaxPreset(val)}
+                            sx={{ minWidth: "auto", px: 1.5 }}
+                          >
+                            {val}
+                          </Button>
+                        ))}
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => setAreaMaxPreset(10000)}
+                      >
+                        Any
                       </Button>
                     </Box>
                   </Grid>
 
-                  {/* Beds & Search Term */}
+                  {/* Beds Dropdown */}
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <FormControl fullWidth size="small">
                       <InputLabel>Beds</InputLabel>
                       <Select
-                        value={bedSelection}
+                        value={localBeds}
                         label="Beds"
-                        onChange={handleBedChange}
+                        onChange={(e) => setLocalBeds(e.target.value)}
                       >
                         {bedOptions.map((opt) => (
                           <MenuItem key={opt} value={opt}>
@@ -538,62 +617,60 @@ export default function Home() {
                       </Select>
                     </FormControl>
                   </Grid>
+
+                  {/* Keyword Search */}
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
                       fullWidth
                       label="Keyword"
                       size="small"
-                      value={filters.SearchTerm || ""}
-                      onChange={(e) =>
-                        handleChange("SearchTerm", e.target.value)
-                      }
-                      InputProps={{
-                        startAdornment: (
-                          <SearchIcon color="action" sx={{ mr: 0.5 }} />
-                        ),
-                      }}
+                      value={localSearchTerm}
+                      onChange={(e) => setLocalSearchTerm(e.target.value)}
                     />
                   </Grid>
 
-                  {/* Action buttons */}
-                  <Grid size={{ xs: 12 }}>
-                    <Stack
-                      direction="row"
-                      spacing={1}
-                      justifyContent="flex-end"
-                    >
-                      <Button
-                        size="small"
-                        sx={{ textTransform: "none" }}
-                        onClick={() => setCurrencyModalOpen(true)}
-                      >
-                        Change Currency
-                      </Button>
-                      <Button
-                        size="small"
-                        sx={{ textTransform: "none" }}
-                        onClick={() => setAreaUnitModalOpen(true)}
-                      >
-                        Change Area Unit
-                      </Button>
-                      <Button
-                        size="small"
-                        sx={{ textTransform: "none" }}
-                        onClick={handleReset}
-                      >
-                        Reset
-                      </Button>
-                    </Stack>
+                  <Grid size={{ xs: 12 }} sx={{ textAlign: "right" }}>
+                    <Button size="small" variant="text" onClick={handleReset}>
+                      Reset All Filters
+                    </Button>
                   </Grid>
                 </Grid>
               </Box>
             </Collapse>
+
+            {/* Footer buttons */}
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: 1,
+                mt: 1,
+              }}
+            >
+              <Button
+                size="small"
+                variant="text"
+                onClick={() => setCurrencyModalOpen(true)}
+              >
+                Change Currency
+              </Button>
+              <Button
+                size="small"
+                variant="text"
+                onClick={() => setAreaUnitModalOpen(true)}
+              >
+                Change Area Unit
+              </Button>
+              <Button size="small" variant="text" onClick={handleReset}>
+                Reset Search
+              </Button>
+            </Box>
           </Paper>
         </Container>
       </Box>
 
-      {/* Results summary & quick type filters */}
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 2 }}>
+      {/* Results Summary */}
+      <Container maxWidth="lg" sx={{ mt: 3, mb: 1 }}>
         {data && !loading && (
           <Box
             sx={{
@@ -601,49 +678,66 @@ export default function Home() {
               justifyContent: "space-between",
               alignItems: "center",
               flexWrap: "wrap",
-              gap: 2,
+              gap: 1,
             }}
           >
-            <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 500 }}>
               {displayItems.length} properties found
             </Typography>
-            <Stack direction="row" spacing={1}>
+            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
               <Chip
                 label="All"
+                size="small"
                 variant={clientTypeFilter === null ? "filled" : "outlined"}
                 color={clientTypeFilter === null ? "primary" : "default"}
                 onClick={() => setClientTypeFilter(null)}
                 clickable
               />
-              {propertyTypeOptions.map((type) => (
-                <Chip
-                  key={type}
-                  label={
-                    type === "HOUSE"
-                      ? "House"
-                      : type === "FLAT"
-                        ? "Flat"
-                        : type === "COMMERCIAL"
-                          ? "Commercial"
-                          : "Shop"
-                  }
-                  variant={clientTypeFilter === type ? "filled" : "outlined"}
-                  color={clientTypeFilter === type ? "primary" : "default"}
-                  onClick={() =>
-                    setClientTypeFilter(type === clientTypeFilter ? null : type)
-                  }
-                  clickable
-                />
-              ))}
+              <Chip
+                label="House"
+                size="small"
+                variant={clientTypeFilter === "HOUSE" ? "filled" : "outlined"}
+                color={clientTypeFilter === "HOUSE" ? "primary" : "default"}
+                onClick={() => setClientTypeFilter("HOUSE")}
+                clickable
+              />
+              <Chip
+                label="Flat"
+                size="small"
+                variant={clientTypeFilter === "FLAT" ? "filled" : "outlined"}
+                color={clientTypeFilter === "FLAT" ? "primary" : "default"}
+                onClick={() => setClientTypeFilter("FLAT")}
+                clickable
+              />
+              <Chip
+                label="Commercial"
+                size="small"
+                variant={
+                  clientTypeFilter === "COMMERCIAL" ? "filled" : "outlined"
+                }
+                color={
+                  clientTypeFilter === "COMMERCIAL" ? "primary" : "default"
+                }
+                onClick={() => setClientTypeFilter("COMMERCIAL")}
+                clickable
+              />
+              <Chip
+                label="Shop"
+                size="small"
+                variant={clientTypeFilter === "SHOP" ? "filled" : "outlined"}
+                color={clientTypeFilter === "SHOP" ? "primary" : "default"}
+                onClick={() => setClientTypeFilter("SHOP")}
+                clickable
+              />
             </Stack>
           </Box>
         )}
       </Container>
 
-      {/* Property Listings */}
-      <Container maxWidth="lg" sx={{ mb: 6 }}>
+      {/* Property Grid */}
+      <Container maxWidth="lg" sx={{ mb: 5 }}>
         {loading ? (
-          <Grid container spacing={4}>
+          <Grid container spacing={3}>
             {Array.from(new Array(6)).map((_, idx) => (
               <Grid size={{ xs: 12, sm: 6, md: 4 }} key={idx}>
                 <PropertyCardSkeleton />
@@ -651,18 +745,16 @@ export default function Home() {
             ))}
           </Grid>
         ) : error ? (
-          <Alert severity="error" sx={{ mb: 3 }}>
-            {error}
-          </Alert>
+          <Alert severity="error">{error}</Alert>
         ) : displayItems.length === 0 ? (
           <Typography
-            sx={{ textAlign: "center", color: "text.secondary", py: 8 }}
+            sx={{ textAlign: "center", color: "text.secondary", py: 6 }}
           >
             No properties found. Try adjusting your filters.
           </Typography>
         ) : (
           <>
-            <Grid container spacing={4}>
+            <Grid container spacing={3}>
               {displayItems.map((property) => (
                 <Grid size={{ xs: 12, sm: 6, md: 4 }} key={property.id}>
                   <PropertyCard property={property} formatPrice={formatPrice} />
@@ -670,116 +762,22 @@ export default function Home() {
               ))}
             </Grid>
             {data && data.totalCount > 0 && (
-              <Box sx={{ display: "flex", justifyContent: "center", mt: 6 }}>
+              <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
                 <Pagination
                   count={Math.ceil(data.totalCount / data.pageSize)}
                   page={data.page}
-                  onChange={(_, page) => handleChange("Page", page)}
+                  onChange={(_, page) => {
+                    setFilters((prev) => ({ ...prev, Page: page }));
+                    refetch();
+                  }}
                   color="primary"
-                  size="large"
+                  size="medium"
                 />
               </Box>
             )}
           </>
         )}
       </Container>
-
-      {/* Testimonials */}
-      <Box sx={{ backgroundColor: "#f8fafc", py: 8 }}>
-        <Container maxWidth="lg">
-          <Typography
-            variant="h4"
-            sx={{ textAlign: "center", fontWeight: 700, mb: 1 }}
-          >
-            What Our Clients Say
-          </Typography>
-          <Typography
-            variant="subtitle1"
-            sx={{ textAlign: "center", color: "text.secondary", mb: 6 }}
-          >
-            Trusted by thousands of homeowners and agents across Pakistan
-          </Typography>
-          <Grid container spacing={4}>
-            {[
-              {
-                name: "Ayesha Khan",
-                role: "Homeowner",
-                quote:
-                  "PropertyHub made finding our dream home so easy. The filters are spot‑on, and the agents were incredibly helpful throughout the process.",
-                avatar: "https://i.pravatar.cc/150?img=47",
-                stars: 5,
-              },
-              {
-                name: "Ali Raza",
-                role: "Investor",
-                quote:
-                  "I've invested in multiple properties through this platform. The detailed listings and honest agent profiles give me confidence in every deal.",
-                avatar: "https://i.pravatar.cc/150?img=12",
-                stars: 4,
-              },
-              {
-                name: "Sara Ahmed",
-                role: "Tenant",
-                quote:
-                  "Renting my apartment was a breeze. I submitted an enquiry and got a call within an hour. Highly recommended!",
-                avatar: "https://i.pravatar.cc/150?img=23",
-                stars: 5,
-              },
-            ].map((testimonial, index) => (
-              <Grid size={{ xs: 12, sm: 6, md: 4 }} key={index}>
-                <Paper
-                  elevation={3}
-                  sx={{
-                    p: 4,
-                    borderRadius: 3,
-                    textAlign: "center",
-                    height: "100%",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: 2,
-                  }}
-                >
-                  <Box
-                    component="img"
-                    src={testimonial.avatar}
-                    alt={testimonial.name}
-                    sx={{
-                      width: 80,
-                      height: 80,
-                      borderRadius: "50%",
-                      objectFit: "cover",
-                      border: "3px solid #f59e0b",
-                    }}
-                  />
-                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                    {testimonial.name}
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: "text.secondary" }}>
-                    {testimonial.role}
-                  </Typography>
-                  <Box sx={{ display: "flex", gap: 0.5 }}>
-                    {Array.from({ length: 5 }, (_, i) => (
-                      <StarIcon
-                        key={i}
-                        sx={{
-                          color: i < testimonial.stars ? "#f59e0b" : "#ddd",
-                        }}
-                      />
-                    ))}
-                  </Box>
-                  <Typography
-                    variant="body1"
-                    sx={{ fontStyle: "italic", mt: 1, color: "text.primary" }}
-                  >
-                    &ldquo;{testimonial.quote}&rdquo;
-                  </Typography>
-                </Paper>
-              </Grid>
-            ))}
-          </Grid>
-        </Container>
-      </Box>
 
       {/* Currency Modal */}
       <Dialog
@@ -788,13 +786,13 @@ export default function Home() {
       >
         <DialogTitle>Select Currency</DialogTitle>
         <DialogContent>
-          <FormControl fullWidth size="small">
+          <FormControl fullWidth size="small" sx={{ mt: 1 }}>
             <InputLabel>Currency</InputLabel>
             <Select
               value={currencyUI}
               label="Currency"
               onChange={(e) => {
-                setCurrencyUI(e.target.value as any);
+                setCurrencyUI(e.target.value as "PKR" | "USD");
                 setCurrencyModalOpen(false);
               }}
             >
@@ -815,24 +813,23 @@ export default function Home() {
       >
         <DialogTitle>Select Area Unit</DialogTitle>
         <DialogContent>
-          <FormControl fullWidth size="small">
-            <InputLabel>Area Unit</InputLabel>
-            <Select
-              value={areaUnitUI}
-              label="Area Unit"
-              onChange={(e) => {
-                setAreaUnitUI(e.target.value);
-                applyAreaFilter(areaMinInput, areaMaxInput);
-                setAreaUnitModalOpen(false);
-              }}
-            >
-              {areaUnits.map((unit) => (
-                <MenuItem key={unit.value} value={unit.value}>
-                  {unit.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <RadioGroup
+            value={selectedAreaUnit.value}
+            onChange={(e) => {
+              const unit = areaUnits.find((u) => u.value === e.target.value);
+              if (unit) setSelectedAreaUnit(unit);
+              setAreaUnitModalOpen(false);
+            }}
+          >
+            {areaUnits.map((unit) => (
+              <FormControlLabel
+                key={unit.value}
+                value={unit.value}
+                control={<Radio />}
+                label={unit.label}
+              />
+            ))}
+          </RadioGroup>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setAreaUnitModalOpen(false)}>Cancel</Button>
