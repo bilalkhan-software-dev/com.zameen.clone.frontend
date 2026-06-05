@@ -545,59 +545,6 @@ export default function Home() {
                         fullWidth
                       />
                     </Box>
-                    {/* Quick preset buttons */}
-                    <Box
-                      sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 1 }}
-                    >
-                      <Typography variant="caption" sx={{ mr: 1 }}>
-                        Min:
-                      </Typography>
-                      {areaPresetsSqFt.map((val) => (
-                        <Button
-                          key={`min-${val}`}
-                          size="small"
-                          variant="outlined"
-                          onClick={() => setAreaMinPreset(val)}
-                          sx={{ minWidth: "auto", px: 1.5 }}
-                        >
-                          {val === 0 ? "0" : val}
-                        </Button>
-                      ))}
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        onClick={() => setAreaMinPreset(0)}
-                      >
-                        Any
-                      </Button>
-                    </Box>
-                    <Box
-                      sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 1 }}
-                    >
-                      <Typography variant="caption" sx={{ mr: 1 }}>
-                        Max:
-                      </Typography>
-                      {areaPresetsSqFt
-                        .filter((v) => v > 0)
-                        .map((val) => (
-                          <Button
-                            key={`max-${val}`}
-                            size="small"
-                            variant="outlined"
-                            onClick={() => setAreaMaxPreset(val)}
-                            sx={{ minWidth: "auto", px: 1.5 }}
-                          >
-                            {val}
-                          </Button>
-                        ))}
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        onClick={() => setAreaMaxPreset(10000)}
-                      >
-                        Any
-                      </Button>
-                    </Box>
                   </Grid>
 
                   {/* Beds Dropdown */}

@@ -51,6 +51,8 @@ export interface PropertyFilterParams {
   MaxPrice?: number;
   MinBedrooms?: number;
   MaxBedrooms?: number;
+  MinBathrooms?: number;
+  MaxBathrooms?: number;
   MinAreaSize?: number;
   MaxAreaSize?: number;
   SearchTerm?: string;
