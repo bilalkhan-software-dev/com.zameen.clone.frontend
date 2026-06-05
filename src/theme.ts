@@ -46,7 +46,7 @@ const theme = createTheme({
         root: {
           textTransform: "none",
           fontWeight: 600,
-          padding: "10px 24px",
+          padding: "10px 20px",
           borderRadius: 12,
           transition: "all 0.2s ease-in-out",
           "&:hover": {

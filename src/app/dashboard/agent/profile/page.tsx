@@ -15,7 +15,6 @@ import {
 } from "@mui/material";
 import api from "@/lib/axios";
 
-// Cloudinary credentials (same as used for property images)
 const CLOUDINARY_CLOUD_NAME = "dkkgqafqw";
 const CLOUDINARY_UPLOAD_PRESET = "your-social";
 const MAX_FILE_SIZE_MB = 2;
@@ -26,6 +25,8 @@ interface AgentProfile {
   userId: string;
   agencyName: string;
   profilePic?: string | null;
+  contactNumber?: string;
+  contactEmail?: string;
   accountStatus?: string;
   bio?: string | null;
 }
@@ -38,6 +39,8 @@ export default function AgentProfilePage() {
   // Form fields
   const [agencyName, setAgencyName] = useState("");
   const [bio, setBio] = useState("");
+  const [contactNumber, setContactNumber] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
   const [profilePic, setProfilePic] = useState<string | null>(null);
 
   // Image upload
@@ -45,7 +48,6 @@ export default function AgentProfilePage() {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  // Snackbar
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
@@ -64,6 +66,8 @@ export default function AgentProfilePage() {
         setProfile(data);
         setAgencyName(data.agencyName || "");
         setBio(data.bio || "");
+        setContactNumber(data.contactNumber || "");
+        setContactEmail(data.contactEmail || "");
         setProfilePic(data.profilePic || null);
       } catch (err: any) {
         setSnackbar({
@@ -97,7 +101,7 @@ export default function AgentProfilePage() {
 
   // Upload selected file to Cloudinary and return the secure URL
   const uploadProfilePic = async (): Promise<string | null> => {
-    if (!selectedFile) return profilePic; // no new file selected
+    if (!selectedFile) return profilePic;
     setUploading(true);
     setUploadProgress(0);
     try {
@@ -105,12 +109,11 @@ export default function AgentProfilePage() {
       formData.append("file", selectedFile);
       formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
 
-      // Simulate progress
       setUploadProgress(30);
 
       const res = await fetch(
         `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
-        { method: "POST", body: formData },
+        { method: "POST", body: formData }
       );
       if (!res.ok) throw new Error("Upload failed");
       const data = await res.json();
@@ -133,23 +136,23 @@ export default function AgentProfilePage() {
     e.preventDefault();
     setSaving(true);
 
-    // 1. Upload image if a new file was selected
     let finalPicUrl = profilePic;
     if (selectedFile) {
       const uploadedUrl = await uploadProfilePic();
       if (uploadedUrl) {
         finalPicUrl = uploadedUrl;
-        setProfilePic(uploadedUrl); // update preview
+        setProfilePic(uploadedUrl);
       } else {
         setSaving(false);
-        return; // upload failed, error already shown
+        return;
       }
     }
 
-    // 2. Build the update payload (only changed fields if you want partial, but we send full)
     const payload = {
       agencyName,
       bio,
+      contactNumber,
+      contactEmail,
       profilePic: finalPicUrl,
     };
 
@@ -259,6 +262,22 @@ export default function AgentProfilePage() {
           fullWidth
           value={agencyName}
           onChange={(e) => setAgencyName(e.target.value)}
+        />
+
+        <TextField
+          label="Contact Number"
+          fullWidth
+          value={contactNumber}
+          onChange={(e) => setContactNumber(e.target.value)}
+          helperText="Pakistani phone number"
+        />
+
+        <TextField
+          label="Contact Email"
+          type="email"
+          fullWidth
+          value={contactEmail}
+          onChange={(e) => setContactEmail(e.target.value)}
         />
 
         <TextField

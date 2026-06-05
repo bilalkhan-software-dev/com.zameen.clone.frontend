@@ -17,8 +17,9 @@ import {
   FormControl,
   InputLabel,
   OutlinedInput,
+  Tooltip,
 } from "@mui/material";
-import { Visibility, VisibilityOff } from "@mui/icons-material";
+import { Visibility, VisibilityOff, InfoOutlined } from "@mui/icons-material";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 
@@ -37,6 +38,7 @@ export default function SignupPage() {
     isAgency: false,
     agencyName: "",
     contactNumber: "",
+    contactEmail: "",
     bio: "",
   });
 
@@ -74,8 +76,12 @@ export default function SignupPage() {
       }
       if (!validatePakistaniNumber(form.contactNumber)) {
         setError(
-          "Invalid Pakistani phone number. Use formats like 03XXXXXXXXX, +923XXXXXXXXX, 03xx-xxxxxxx, or +92-3xx-xxxxxxx.",
+          "Invalid Pakistani phone number. Use formats like 03XXXXXXXXX, +923XXXXXXXXX, 03xx-xxxxxxx, or +92-3xx-xxxxxxx."
         );
+        return;
+      }
+      if (!form.contactEmail.trim()) {
+        setError("Contact Email is required for agent registration.");
         return;
       }
       if (!form.bio.trim()) {
@@ -93,6 +99,7 @@ export default function SignupPage() {
         isAgency: form.isAgency,
         agencyName: form.isAgency ? form.agencyName : undefined,
         contactNumber: form.contactNumber ? form.contactNumber : undefined,
+        contactEmail: form.contactEmail ? form.contactEmail : undefined,
         bio: form.isAgency ? form.bio : undefined,
       });
       setOpenSnackbar(true);
@@ -142,7 +149,7 @@ export default function SignupPage() {
           value={form.email}
           onChange={handleChange}
         />
-        <FormControl variant="outlined">
+        <FormControl variant="outlined" fullWidth>
           <InputLabel htmlFor="password">Password</InputLabel>
           <OutlinedInput
             id="password"
@@ -191,6 +198,24 @@ export default function SignupPage() {
               value={form.contactNumber}
               onChange={handleChange}
               helperText="e.g., 03XXXXXXXXX, +923XXXXXXXXX, 03xx-xxxxxxx"
+            />
+            <TextField
+              label="Contact Email"
+              name="contactEmail"
+              required
+              type="email"
+              value={form.contactEmail}
+              onChange={handleChange}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <Tooltip title="This email will be used to contact you for verification and updates.">
+                      <InfoOutlined color="action" fontSize="small" />
+                    </Tooltip>
+                  </InputAdornment>
+                ),
+              }}
+              helperText="Required for agency registration"
             />
             <TextField
               label="Bio"

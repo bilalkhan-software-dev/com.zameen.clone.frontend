@@ -24,17 +24,26 @@ import {
   AccordionDetails,
   Checkbox,
   FormControlLabel,
-  InputAdornment,
-  Divider,
+  Paper,
+  Tooltip,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import DeleteIcon from "@mui/icons-material/Delete";
+import InfoIcon from "@mui/icons-material/Info";
 import { useRouter } from "next/navigation";
 import api from "@/lib/axios";
 import { CreatePropertyRequest } from "@/lib/types";
 import Image from "next/image";
 
-const propertyTypeOptions = ["HOUSE", "FLAT", "COMMERCIAL", "SHOP"];
+const propertyTypeOptions = [
+  "HOUSE",
+  "FLAT",
+  "PLOT",
+  "COMMERCIAL",
+  "SHOP",
+  "STUDIO",
+  "FACTORY",
+];
 const propertyPurposeOptions = ["BUY", "RENT"];
 const areaUnitOptions = ["MARLA", "KANAL", "SQUARE_FEET"];
 
@@ -45,16 +54,13 @@ const MAX_FILES = 5;
 const MAX_FILE_SIZE_MB = 2;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
-// Conversion factors to square feet
 const areaUnitToSqFt: Record<string, number> = {
   MARLA: 272.25,
-  KANAL: 272.25 * 20, // 1 Kanal = 20 Marla = 5445 sq ft
+  KANAL: 272.25 * 20,
   SQUARE_FEET: 1,
 };
 
-// Initial amenities structure
 const initialAmenities: Record<string, any> = {
-  // Main Features
   builtInYear: "",
   parkingSpaces: "",
   lobbyInBuilding: false,
@@ -70,11 +76,9 @@ const initialAmenities: Record<string, any> = {
   serviceElevatorsInBuilding: false,
   otherMainFeatures: false,
   furnished: false,
-  // Rooms
   rooms: "",
   servantQuarters: "",
   otherRooms: false,
-  // Business and Communication
   broadbandInternetAccess: false,
   satelliteOrCableTVReady: false,
   businessCenterOrMediaRoom: false,
@@ -82,7 +86,6 @@ const initialAmenities: Record<string, any> = {
   intercom: false,
   atmMachines: false,
   otherBusinessFacilities: false,
-  // Community Features
   communityLawnOrGarden: false,
   communitySwimmingPool: false,
   communityGym: false,
@@ -93,10 +96,8 @@ const initialAmenities: Record<string, any> = {
   mosque: false,
   communityCentre: false,
   otherCommunityFacilities: false,
-  // Healthcare Recreational
   lawnOrGarden: false,
   otherHealthcareRecreation: false,
-  // Nearby Locations
   nearbySchools: false,
   nearbyHospitals: false,
   nearbyShoppingMalls: false,
@@ -104,7 +105,6 @@ const initialAmenities: Record<string, any> = {
   distanceFromAirportKm: "",
   nearbyPublicTransport: false,
   otherNearbyPlaces: false,
-  // Other Facilities
   maintenanceStaff: false,
   securityStaff: false,
   facilitiesForDisabled: false,
@@ -134,12 +134,10 @@ export default function AddPropertyPage() {
 
   const [areaSizeRaw, setAreaSizeRaw] = useState<number>(0);
   const [areaUnit, setAreaUnit] = useState<string>("MARLA");
-
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadedUrls, setUploadedUrls] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-
   const [loading, setLoading] = useState(false);
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
@@ -152,6 +150,16 @@ export default function AddPropertyPage() {
 
   const handleChange = (field: keyof CreatePropertyRequest, value: any) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleNumericChange = (
+    field: keyof CreatePropertyRequest,
+    value: string,
+  ) => {
+    const num = value === "" ? undefined : Number(value);
+    if (num === undefined || !isNaN(num)) {
+      handleChange(field, num);
+    }
   };
 
   const handleAmenityChange = (key: string, value: any) => {
@@ -232,21 +240,20 @@ export default function AddPropertyPage() {
     e.preventDefault();
     setLoading(true);
 
-    // Convert area to square feet
     const convertedAreaSqFt = areaSizeRaw * areaUnitToSqFt[areaUnit];
 
     const payload: CreatePropertyRequest = {
       title: form.title!,
       description: form.description!,
-      price: form.price!,
+      price: form.price ?? 0,
       city: form.city!,
       address: form.address!,
       location: form.location!,
-      latitude: form.latitude!,
-      longitude: form.longitude!,
-      bedrooms: form.bedrooms!,
-      bathrooms: form.bathrooms!,
-      areaSize: convertedAreaSqFt, // calculated from areaSizeRaw and areaUnit
+      latitude: form.latitude ?? 0,
+      longitude: form.longitude ?? 0,
+      bedrooms: form.bedrooms ?? 0,
+      bathrooms: form.bathrooms ?? 0,
+      areaSize: convertedAreaSqFt,
       propertyType: form.propertyType!,
       propertyPurpose: form.propertyPurpose!,
       propertyPics: uploadedUrls,
@@ -260,9 +267,7 @@ export default function AddPropertyPage() {
         message: "Property created successfully!",
         severity: "success",
       });
-      setTimeout(() => {
-        router.push("/dashboard/agent/properties");
-      }, 1500);
+      setTimeout(() => router.push("/dashboard/agent/properties"), 1500);
     } catch (err: any) {
       const msg = err.response?.data?.message || "Failed to create property";
       setSnackbar({ open: true, message: msg, severity: "error" });
@@ -271,7 +276,6 @@ export default function AddPropertyPage() {
     }
   };
 
-  // Helper to render amenities sections
   const renderAmenities = () => (
     <Box sx={{ mt: 3 }}>
       <Typography variant="h6" gutterBottom>
@@ -805,15 +809,58 @@ export default function AddPropertyPage() {
       <Typography variant="h4" gutterBottom>
         Add New Property
       </Typography>
+
+      {/* Instructions for Latitude & Longitude with Info icon */}
+      <Paper
+        elevation={0}
+        variant="outlined"
+        sx={{
+          p: 2,
+          mb: 3,
+          bgcolor: "#f5f5f5",
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 1,
+        }}
+      >
+        <Tooltip title="These coordinates are used to place the property on the map and find nearby amenities.">
+          <InfoIcon color="info" sx={{ mt: 0.5 }} />
+        </Tooltip>
+        <Box>
+          <Typography variant="subtitle2" gutterBottom>
+            How to get Latitude & Longitude?
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            1. Open{" "}
+            <a
+              href="https://www.google.com/maps"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Google Maps
+            </a>{" "}
+            and search for your property address.
+            <br />
+            2. Right‑click on the exact location → select{" "}
+            <strong>"What's here?"</strong>
+            <br />
+            3. The coordinates appear at the bottom (e.g.,{" "}
+            <code>31.4221, 74.3426</code>).
+            <br />
+            4. Paste the first number as <strong>Latitude</strong> and the
+            second as <strong>Longitude</strong>.
+          </Typography>
+        </Box>
+      </Paper>
+
       <Box component="form" onSubmit={handleSubmit}>
         <Grid container spacing={2}>
-          {/* Existing fields ... (keep all previous text fields) */}
           <Grid size={{ xs: 12 }}>
             <TextField
               label="Title"
               required
               fullWidth
-              value={form.title}
+              value={form.title || ""}
               onChange={(e) => handleChange("title", e.target.value)}
             />
           </Grid>
@@ -824,7 +871,7 @@ export default function AddPropertyPage() {
               fullWidth
               multiline
               rows={4}
-              value={form.description}
+              value={form.description || ""}
               onChange={(e) => handleChange("description", e.target.value)}
             />
           </Grid>
@@ -834,8 +881,8 @@ export default function AddPropertyPage() {
               type="number"
               required
               fullWidth
-              value={form.price || ""}
-              onChange={(e) => handleChange("price", Number(e.target.value))}
+              value={form.price ?? ""}
+              onChange={(e) => handleNumericChange("price", e.target.value)}
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 6 }}>
@@ -843,7 +890,7 @@ export default function AddPropertyPage() {
               label="City"
               required
               fullWidth
-              value={form.city}
+              value={form.city || ""}
               onChange={(e) => handleChange("city", e.target.value)}
             />
           </Grid>
@@ -852,7 +899,7 @@ export default function AddPropertyPage() {
               label="Address"
               required
               fullWidth
-              value={form.address}
+              value={form.address || ""}
               onChange={(e) => handleChange("address", e.target.value)}
             />
           </Grid>
@@ -870,7 +917,7 @@ export default function AddPropertyPage() {
               type="number"
               fullWidth
               value={form.bedrooms ?? ""}
-              onChange={(e) => handleChange("bedrooms", Number(e.target.value))}
+              onChange={(e) => handleNumericChange("bedrooms", e.target.value)}
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 6 }}>
@@ -879,9 +926,7 @@ export default function AddPropertyPage() {
               type="number"
               fullWidth
               value={form.bathrooms ?? ""}
-              onChange={(e) =>
-                handleChange("bathrooms", Number(e.target.value))
-              }
+              onChange={(e) => handleNumericChange("bathrooms", e.target.value)}
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 6 }}>
@@ -890,8 +935,12 @@ export default function AddPropertyPage() {
               type="number"
               required
               fullWidth
-              value={areaSizeRaw || ""}
-              onChange={(e) => setAreaSizeRaw(Number(e.target.value))}
+              value={areaSizeRaw === 0 ? "" : areaSizeRaw}
+              onChange={(e) => {
+                const val =
+                  e.target.value === "" ? 0 : parseFloat(e.target.value);
+                if (!isNaN(val)) setAreaSizeRaw(val);
+              }}
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 6 }}>
@@ -914,7 +963,7 @@ export default function AddPropertyPage() {
             <FormControl fullWidth>
               <InputLabel>Property Type</InputLabel>
               <Select
-                value={form.propertyType}
+                value={form.propertyType || "HOUSE"}
                 label="Property Type"
                 onChange={(e) => handleChange("propertyType", e.target.value)}
               >
@@ -930,7 +979,7 @@ export default function AddPropertyPage() {
             <FormControl fullWidth>
               <InputLabel>Property Purpose</InputLabel>
               <Select
-                value={form.propertyPurpose}
+                value={form.propertyPurpose || "BUY"}
                 label="Property Purpose"
                 onChange={(e) =>
                   handleChange("propertyPurpose", e.target.value)
@@ -944,8 +993,6 @@ export default function AddPropertyPage() {
               </Select>
             </FormControl>
           </Grid>
-
-          {/* Latitude & Longitude */}
           <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               label="Latitude"
@@ -953,9 +1000,8 @@ export default function AddPropertyPage() {
               required
               fullWidth
               value={form.latitude ?? ""}
-              onChange={(e) =>
-                handleChange("latitude", parseFloat(e.target.value))
-              }
+              onChange={(e) => handleNumericChange("latitude", e.target.value)}
+              helperText="e.g., 31.4221"
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 6 }}>
@@ -965,13 +1011,12 @@ export default function AddPropertyPage() {
               required
               fullWidth
               value={form.longitude ?? ""}
-              onChange={(e) =>
-                handleChange("longitude", parseFloat(e.target.value))
-              }
+              onChange={(e) => handleNumericChange("longitude", e.target.value)}
+              helperText="e.g., 74.3426"
             />
           </Grid>
 
-          {/* Image upload section (unchanged) */}
+          {/* Image Upload */}
           <Grid size={{ xs: 12 }}>
             <Typography variant="subtitle1" gutterBottom>
               Property Images ({uploadedUrls.length}/{MAX_FILES})
@@ -1026,18 +1071,15 @@ export default function AddPropertyPage() {
                     <Image
                       src={url}
                       alt={`Upload ${index + 1}`}
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover",
-                      }}
+                      fill
+                      style={{ objectFit: "cover" }}
                     />
                     <IconButton
                       sx={{
                         position: "absolute",
                         top: 2,
                         right: 2,
-                        backgroundColor: "rgba(255,255,255,0.8)",
+                        bgcolor: "rgba(255,255,255,0.8)",
                       }}
                       size="small"
                       onClick={() => removeImage(index)}
@@ -1050,8 +1092,7 @@ export default function AddPropertyPage() {
             )}
           </Grid>
 
-          {/* Amenities Section */}
-          <Grid size={{ xs: 12 }}>{renderAmenities()}</Grid>
+          {renderAmenities()}
         </Grid>
 
         <Box sx={{ mt: 4, display: "flex", gap: 2 }}>
@@ -1079,7 +1120,6 @@ export default function AddPropertyPage() {
           onClose={handleCloseSnackbar}
           severity={snackbar.severity}
           variant="filled"
-          sx={{ width: "100%" }}
         >
           {snackbar.message}
         </Alert>

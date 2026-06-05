@@ -52,6 +52,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const register = async (data: RegisterRequest) => {
     const res = await api.post("/api/Auth/register", data);
+     console.log(res);
     const { accessToken, refreshToken } = res.data.data;
     localStorage.setItem("accessToken", accessToken);
     localStorage.setItem("refreshToken", refreshToken);
