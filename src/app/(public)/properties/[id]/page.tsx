@@ -74,6 +74,9 @@ import { useSettings } from "@/context/SettingsContext";
 // ----------------------------------------------------------------------
 const StyledTabs = styled(Tabs)(({ theme }) => ({
   minHeight: 48,
+  "& .MuiTabs-indicator": {
+    display: "none",
+  },
   "& .MuiTabs-flexContainer": {
     gap: theme.spacing(1),
     justifyContent: "center",
@@ -658,6 +661,37 @@ const LocationMapSection = ({
 };
 
 // ----------------------------------------------------------------------
+// Skeleton for loading state
+// ----------------------------------------------------------------------
+const PropertyDetailSkeleton = () => (
+  <Box sx={{ minHeight: "100vh" }}>
+    <Container maxWidth="lg" sx={{ mt: 10, mb: 2 }}>
+      <Skeleton variant="text" width={200} />
+      <Skeleton variant="text" width={150} sx={{ mt: 1 }} />
+    </Container>
+    <Container maxWidth="lg" sx={{ mt: 4, mb: 8 }}>
+      <Skeleton variant="text" width="60%" height={60} />
+      <Stack direction="row" spacing={1} sx={{ my: 2 }}>
+        <Skeleton variant="rounded" width={80} height={32} />
+        <Skeleton variant="rounded" width={80} height={32} />
+        <Skeleton variant="rounded" width={80} height={32} />
+      </Stack>
+      <Grid container spacing={4}>
+        <Grid size={{ xs: 12, md: 8 }}>
+          <Skeleton variant="rounded" height={400} sx={{ mb: 4 }} />
+          <Skeleton variant="rounded" height={50} sx={{ mb: 4 }} />
+          <Skeleton variant="rounded" height={200} sx={{ mb: 2 }} />
+          <Skeleton variant="rounded" height={200} sx={{ mb: 2 }} />
+        </Grid>
+        <Grid size={{ xs: 12, md: 4 }}>
+          <Skeleton variant="rounded" height={300} />
+        </Grid>
+      </Grid>
+    </Container>
+  </Box>
+);
+
+// ----------------------------------------------------------------------
 // Main Component
 // ----------------------------------------------------------------------
 export default function PropertyDetailPage() {
@@ -689,7 +723,6 @@ export default function PropertyDetailPage() {
 
   const overviewRef = useRef<HTMLDivElement>(null);
   const locationRef = useRef<HTMLDivElement>(null);
-  const financeRef = useRef<HTMLDivElement>(null);
   const priceIndexRef = useRef<HTMLDivElement>(null);
   const trendsRef = useRef<HTMLDivElement>(null);
 
@@ -769,14 +802,13 @@ export default function PropertyDetailPage() {
     fetchSimilar();
   }, [property, id]);
 
-  // Intersection Observer for scroll spy
+  // Intersection Observer for scroll spy – now only 4 sections
   useEffect(() => {
     const sections = [
       { ref: overviewRef, index: 0 },
       { ref: locationRef, index: 1 },
-      { ref: financeRef, index: 2 },
-      { ref: priceIndexRef, index: 3 },
-      { ref: trendsRef, index: 4 },
+      { ref: priceIndexRef, index: 2 },
+      { ref: trendsRef, index: 3 },
     ];
     const observer = new IntersectionObserver(
       (entries) => {
@@ -787,13 +819,9 @@ export default function PropertyDetailPage() {
           );
           if (section && section.index !== tabValue) {
             setTabValue(section.index);
-            const hash = [
-              "#overview",
-              "#location",
-              "#finance",
-              "#price-index",
-              "#trends",
-            ][section.index];
+            const hash = ["#overview", "#location", "#price-index", "#trends"][
+              section.index
+            ];
             window.history.replaceState(null, "", hash);
           }
         }
@@ -808,13 +836,7 @@ export default function PropertyDetailPage() {
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
-    const refs = [
-      overviewRef,
-      locationRef,
-      financeRef,
-      priceIndexRef,
-      trendsRef,
-    ];
+    const refs = [overviewRef, locationRef, priceIndexRef, trendsRef];
     const target = refs[newValue]?.current;
     if (target) target.scrollIntoView({ behavior: "smooth" });
   };
@@ -836,12 +858,6 @@ export default function PropertyDetailPage() {
   const sizeRange = property?.areaSize
     ? mapAreaToSizeRange(property.areaSize)
     : "Custom";
-
-  // const formatPrice = (price: number) => {
-  //   if (price >= 10_000_000) return `PKR ${(price / 10_000_000).toFixed(2)}Cr`;
-  //   if (price >= 100_000) return `PKR ${(price / 100_000).toFixed(1)}L`;
-  //   return `PKR ${price.toLocaleString()}`;
-  // };
 
   // Render functions
   const renderDetails = () => (
@@ -998,9 +1014,7 @@ export default function PropertyDetailPage() {
     <TrendingLocationsChart city={property?.city || "Lahore"} days={30} />
   );
 
-  // ------------------------------------------------------------------
-  // Unified enquiry form (replaces both EnquiryForm and guest modal)
-  // ------------------------------------------------------------------
+  // Unified enquiry form
   const [enquiryForm, setEnquiryForm] = useState({
     name: "",
     email: "",
@@ -1028,7 +1042,6 @@ export default function PropertyDetailPage() {
         message: "Enquiry sent!",
         severity: "success",
       });
-      
       setEnquiryForm({
         name: "",
         email: "",
@@ -1037,7 +1050,7 @@ export default function PropertyDetailPage() {
         userType: "Buyer/Tenant",
       });
     } catch (err) {
-      console.log("Price Trend",err);
+      console.log("Enquiry error", err);
       setSnackbar({
         open: true,
         message: "Failed to send enquiry.",
@@ -1054,7 +1067,6 @@ export default function PropertyDetailPage() {
     return (
       <Paper elevation={2} sx={{ p: 3, mb: 4 }}>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          {/* Agent info */}
           {agent && (
             <>
               <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
@@ -1095,20 +1107,9 @@ export default function PropertyDetailPage() {
                   />
                 </Box>
               </Box>
-              {/* {agent.contactNumber && (
-                <Typography variant="body2">
-                  <strong>Phone:</strong> {agent.contactNumber}
-                </Typography>
-              )}
-              {agent.contactEmail && (
-                <Typography variant="body2">
-                  <strong>Email:</strong> {agent.contactEmail}
-                </Typography>
-              )} */}
             </>
           )}
 
-          {/* WhatsApp & Call buttons */}
           {agent?.contactNumber && (
             <Box sx={{ display: "flex", gap: 1 }}>
               <Button
@@ -1140,7 +1141,6 @@ export default function PropertyDetailPage() {
             </Box>
           )}
 
-          {/* Enquiry form – always visible, no login required */}
           <Typography variant="subtitle1" sx={{ fontWeight: 600, mt: 1 }}>
             Send an enquiry
           </Typography>
@@ -1258,12 +1258,7 @@ export default function PropertyDetailPage() {
     </Box>
   );
 
-  if (loading)
-    return (
-      <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-        <CircularProgress size={60} />
-      </Box>
-    );
+  if (loading) return <PropertyDetailSkeleton />;
   if (error || !property)
     return (
       <Container maxWidth="sm" sx={{ py: 8 }}>
@@ -1368,7 +1363,6 @@ export default function PropertyDetailPage() {
                   onChange={handleTabChange}
                   variant="scrollable"
                   scrollButtons="auto"
-                  sx={{ "& .MuiTabs-indicator": { display: "none" } }}
                 >
                   <Tab label="Overview" />
                   <Tab label="Location & Nearby" />
@@ -1389,18 +1383,46 @@ export default function PropertyDetailPage() {
             <div ref={locationRef} id="location">
               {renderLocationMap()}
             </div>
-            <div ref={financeRef} id="finance">
-              {renderHomeFinance()}
-            </div>
+            {/* Home Finance is shown but not part of scroll spy */}
+            <div id="finance">{renderHomeFinance()}</div>
             <div ref={priceIndexRef} id="price-index">
               {renderPriceTrend()}
             </div>
-            <div ref={trendsRef} id="trends">
+            <div ref={trendsRef} id="trends" style={{paddingBottom: "10px"}}>
               {renderTrends()}
+
+              {/* Similar properties */}
+              {!loadingSimilar && similarByLocation.length > 0 && (
+                <PropertyCarousel
+                  properties={similarByLocation}
+                  title={`Similar ${property.propertyType}s around ${property.location || property.city}`}
+                />
+              )}
+              {!loadingSimilar && similarByAgent.length > 0 && (
+                <PropertyCarousel
+                  properties={similarByAgent}
+                  title={`Similar ${property.propertyType}s by ${property.agent?.agencyName || "this agent"}`}
+                />
+              )}
+              {loadingSimilar && (
+                <Box sx={{ display: "flex", gap: 2, overflowX: "auto", mb: 4 }}>
+                  {[1, 2, 3, 4].map((i) => (
+                    <Skeleton
+                      key={i}
+                      variant="rectangular"
+                      width={280}
+                      height={300}
+                      sx={{ borderRadius: 2, flexShrink: 0 }}
+                    />
+                  ))}
+                </Box>
+              )}
+              <SafetyTips />
+              {renderPopularSearches()}
             </div>
 
             {/* Similar properties */}
-            {!loadingSimilar && similarByLocation.length > 0 && (
+            {/* {!loadingSimilar && similarByLocation.length > 0 && (
               <PropertyCarousel
                 properties={similarByLocation}
                 title={`Similar ${property.propertyType}s around ${property.location || property.city}`}
@@ -1426,7 +1448,7 @@ export default function PropertyDetailPage() {
               </Box>
             )}
             <SafetyTips />
-            {renderPopularSearches()}
+            {renderPopularSearches()} */}
           </Grid>
 
           <Grid size={{ xs: 12, md: 4 }}>{renderAgentSidebar()}</Grid>

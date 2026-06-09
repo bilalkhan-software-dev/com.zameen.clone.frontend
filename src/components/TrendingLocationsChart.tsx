@@ -50,6 +50,7 @@ export default function TrendingLocationsChart({
         const res = await api.get("/api/searchlog/trending/locations/by-city", {
           params: { city, days },
         });
+        console.log("Trending location by city",res.data?.data);
 
         // Handle both possible response shapes:
         // - Direct array (res.data is the array)

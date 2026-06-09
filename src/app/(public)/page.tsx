@@ -245,6 +245,7 @@ export default function HomePage() {
         const res = await api.get("/api/Property/trending/locations", {
           params: { top: 30 },
         });
+        console.log("Trending Locations: ",res.data?.data);
         const locations = res.data?.data || res.data;
         if (Array.isArray(locations)) setPopularLocations(locations);
       } catch (err) {
