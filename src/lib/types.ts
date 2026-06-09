@@ -113,6 +113,7 @@ export interface AgentResponse {
   bio?: string;
   accountStatus: string; // "PENDING" | "APPROVED" | "REJECTED"
   contactNumber?: string;
+  contactEmail?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -149,4 +150,8 @@ export interface EnquiryResponse {
   phone?: string;
   message: string;
   createdAt: string;
+  cnic?: string;
+  city?: string;
+  enquiryType?: string;
+  monthlySalary?: string;
 }

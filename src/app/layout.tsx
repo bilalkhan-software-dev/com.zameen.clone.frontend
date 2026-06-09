@@ -1,5 +1,6 @@
 import { Plus_Jakarta_Sans } from "next/font/google";
 import { AuthProvider } from "@/context/AuthContext";
+import { SettingsProvider } from "@/context/SettingsContext";
 import ThemeWrapper from "./ThemeWrapper";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -23,7 +24,9 @@ export default function RootLayout({
     <html lang="en" className={jakarta.className}>
       <body>
         <ThemeWrapper>
-          <AuthProvider>{children}</AuthProvider>
+          <SettingsProvider>
+            <AuthProvider>{children}</AuthProvider>
+          </SettingsProvider>
         </ThemeWrapper>
       </body>
     </html>

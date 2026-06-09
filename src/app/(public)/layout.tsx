@@ -10,7 +10,8 @@ export default function PublicLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const isHome = pathname === "/" || pathname === "/agents";
+  const isHome =
+    pathname === "/" || pathname === "/agents" || pathname === "/properties";
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>

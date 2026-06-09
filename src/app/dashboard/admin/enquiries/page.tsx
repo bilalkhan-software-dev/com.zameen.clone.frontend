@@ -5,7 +5,6 @@ import {
   Container,
   Typography,
   Box,
-  Button,
   Paper,
   Table,
   TableBody,
@@ -15,47 +14,31 @@ import {
   Pagination,
   CircularProgress,
   Alert,
-  Snackbar,
+  Chip,
+  Tooltip, // <-- import Tooltip
 } from "@mui/material";
-import Link from "next/link";
 import api from "@/lib/axios";
-import { PropertyResponse, PagedResult } from "@/lib/types";
+import { EnquiryResponse, PagedResult } from "@/lib/types";
 
-export default function AdminEnquiriesPage() {
-  const [properties, setProperties] =
-    useState<PagedResult<PropertyResponse> | null>(null);
+export default function AdminAllEnquiriesPage() {
+  const [enquiries, setEnquiries] =
+    useState<PagedResult<EnquiryResponse> | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [page, setPage] = useState(1);
   const pageSize = 10;
-  const [snackbar, setSnackbar] = useState<{
-    open: boolean;
-    message: string;
-    severity: "success" | "error";
-  }>({
-    open: false,
-    message: "",
-    severity: "success",
-  });
 
   useEffect(() => {
     (async () => {
       setLoading(true);
+      setError("");
       try {
-        const res = await api.get("/api/Property", {
-          params: {
-            Page: page,
-            PageSize: pageSize,
-            SortBy: "CreatedAt",
-            IsDescending: true,
-          },
+        const res = await api.get("/api/admin/enquiries", {
+          params: { page, size: pageSize, sortBy: "CreatedAt", isNewest: true },
         });
-        setProperties(res.data.data);
+        setEnquiries(res.data.data);
       } catch (err: any) {
-        setSnackbar({
-          open: true,
-          message: err.response?.data?.message || "Failed to load properties",
-          severity: "error",
-        });
+        setError(err.response?.data?.message || "Failed to load enquiries");
       } finally {
         setLoading(false);
       }
@@ -63,44 +46,83 @@ export default function AdminEnquiriesPage() {
   }, [page]);
 
   return (
-    <Container maxWidth="lg">
-      <Typography variant="h4" gutterBottom>
-        Manage Enquiries
-      </Typography>
-      <Typography variant="subtitle1" gutterBottom>
-        Select a property to view and manage its enquiries.
+    <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Typography variant="h4" gutterBottom sx={{ fontWeight: 700 }}>
+        All Enquiries (Admin)
       </Typography>
 
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
+
       {loading ? (
-        <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+        <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
           <CircularProgress />
         </Box>
-      ) : !properties || properties.items.length === 0 ? (
-        <Alert severity="info">No properties found.</Alert>
+      ) : !enquiries || enquiries.items.length === 0 ? (
+        <Alert severity="info">No enquiries found.</Alert>
       ) : (
-        <Paper>
-          <Table>
+        <Paper sx={{ borderRadius: 3, overflowX: "auto" }}>
+          {" "}
+          {/* enable horizontal scroll */}
+          <Table sx={{ minWidth: 900 }}>
+            {" "}
+            {/* set min width to force scroll on small screens */}
             <TableHead>
               <TableRow>
-                <TableCell>Title</TableCell>
-                <TableCell>Agent</TableCell>
-                <TableCell align="center">Actions</TableCell>
+                <TableCell>Property</TableCell>
+                <TableCell>From</TableCell>
+                <TableCell>Email</TableCell>
+                <TableCell>Phone</TableCell>
+                <TableCell>Message</TableCell>
+                <TableCell>Type</TableCell>
+                <TableCell>City</TableCell>
+                <TableCell>Salary</TableCell>
+                <TableCell>CNIC</TableCell>
+                <TableCell>Date</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {properties.items.map((property) => (
-                <TableRow key={property.id}>
-                  <TableCell>{property.title}</TableCell>
-                  <TableCell>{property.agentName}</TableCell>
-                  <TableCell align="center">
-                    <Link
-                      href={`/dashboard/admin/enquiries/${property.id}`}
-                      passHref
-                    >
-                      <Button size="small" variant="outlined">
-                        View Enquiries
-                      </Button>
-                    </Link>
+              {enquiries.items.map((enq) => (
+                <TableRow key={enq.id} hover>
+                  <TableCell>
+                    <Chip
+                      label={`#${enq.propertyId}`}
+                      size="small"
+                      component="a"
+                      href={`/properties/${enq.propertyId}`}
+                      clickable
+                    />
+                  </TableCell>
+                  <TableCell>{enq.senderName}</TableCell>
+                  <TableCell>{enq.senderEmail}</TableCell>
+                  <TableCell>{enq.phone || "-"}</TableCell>
+                  <TableCell>
+                    <Tooltip title={enq.message || ""} arrow>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          maxWidth: 200,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          cursor: "default",
+                        }}
+                      >
+                        {enq.message}
+                      </Typography>
+                    </Tooltip>
+                  </TableCell>
+                  <TableCell>
+                    <Chip label={enq.enquiryType} size="small" />
+                  </TableCell>
+                  <TableCell>{enq.city || "-"}</TableCell>
+                  <TableCell>{enq.monthlySalary || "-"}</TableCell>
+                  <TableCell>{enq.cnic || "-"}</TableCell>
+                  <TableCell>
+                    {new Date(enq.createdAt).toLocaleString()}
                   </TableCell>
                 </TableRow>
               ))}
@@ -108,24 +130,14 @@ export default function AdminEnquiriesPage() {
           </Table>
           <Box sx={{ display: "flex", justifyContent: "center", p: 2 }}>
             <Pagination
-              count={Math.ceil(properties.totalCount / pageSize)}
+              count={Math.ceil(enquiries.totalCount / pageSize)}
               page={page}
               onChange={(_, newPage) => setPage(newPage)}
+              color="primary"
             />
           </Box>
         </Paper>
       )}
-
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={4000}
-        onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-      >
-        <Alert severity={snackbar.severity} variant="filled">
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
     </Container>
   );
 }

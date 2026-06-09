@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useRouter, usePathname } from "next/navigation";
+import Image from "next/image";
 import {
   Box,
   Container,
@@ -12,32 +14,42 @@ import {
   InputLabel,
   Button,
   Grid,
-  Pagination,
-  Alert,
   Paper,
-  Skeleton,
   Autocomplete,
   Chip,
   Collapse,
   Stack,
+  Slider,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  Slider,
   RadioGroup,
   Radio,
   FormControlLabel,
+  Link,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
+  Card,
+  CardActionArea,
+  CardContent,
+  CardMedia,
+  Skeleton,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import TuneIcon from "@mui/icons-material/Tune";
-import { useProperties } from "@/hooks/useProperties";
-import { PropertyFilterParams } from "@/lib/types";
-import PropertyCard from "@/components/PropertyCard";
+import DeleteIcon from "@mui/icons-material/Delete";
+import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import HistoryIcon from "@mui/icons-material/History";
+import LocationOnIcon from "@mui/icons-material/LocationOn";
+import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
 import api from "@/lib/axios";
+import BrowsePropertiesCarousel from "@/components/BrowsePropertiesCarousel";
 
 // ----------------------------------------------------------------------
-// Constants & Helpers
+// Constants
 // ----------------------------------------------------------------------
 const CITIES = [
   "Islamabad",
@@ -51,13 +63,9 @@ const CITIES = [
   "Sialkot",
   "Quetta",
 ];
-
 const bedOptions = ["All", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10+"];
-
-const USD_RATE = 0.0036;
-const MAX_PRICE = 500_000_000; // 50 Crore PKR
-
-// Area units with conversion factors to square feet
+const bathOptions = ["All", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10+"];
+const MAX_PRICE = 500_000_000;
 const areaUnits = [
   { value: "SQUARE_FEET", label: "Sq. Ft.", factor: 1 },
   { value: "SQUARE_YARDS", label: "Sq. Yd.", factor: 9 },
@@ -65,9 +73,16 @@ const areaUnits = [
   { value: "MARLA", label: "Marla", factor: 272.25 },
   { value: "KANAL", label: "Kanal", factor: 5445 },
 ];
-
-// Preset values in square feet (used for quick buttons)
 const areaPresetsSqFt = [0, 500, 1000, 2000, 5000, 10000];
+const propertyTypeOptions = [
+  "HOUSE",
+  "FLAT",
+  "PLOT",
+  "COMMERCIAL",
+  "SHOP",
+  "FACTORY",
+  "STUDIO",
+];
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -78,36 +93,62 @@ function useDebounce<T>(value: T, delay: number): T {
   return debounced;
 }
 
-const PropertyCardSkeleton = () => (
-  <Paper sx={{ borderRadius: 2, overflow: "hidden" }}>
-    <Skeleton variant="rectangular" height={200} />
-    <Box sx={{ p: 2 }}>
-      <Skeleton variant="text" width="80%" />
-      <Skeleton variant="text" width="50%" />
-      <Skeleton variant="text" width="60%" />
-      <Skeleton variant="rectangular" height={36} sx={{ mt: 1 }} />
-    </Box>
-  </Paper>
-);
+const STORAGE_KEYS = {
+  RECENT_SEARCHES: "zameen_recent_searches",
+  VIEWED_PROPERTIES: "zameen_viewed_properties",
+};
 
-export default function Home() {
-  const { data, loading, error, setFilters, refetch } = useProperties({
-    Page: 1,
-    PageSize: 9,
-    SortBy: "CreatedAt",
-    IsDescending: true,
-  });
+interface SavedSearch {
+  query: string;
+  timestamp: number;
+  displayText: string;
+  city?: string;
+  location?: string;
+  priceMin?: number;
+  priceMax?: number;
+}
+
+interface ViewedProperty {
+  id: number;
+  title: string;
+  price: number;
+  image?: string;
+  timestamp: number;
+}
+
+interface FullProperty {
+  id: number;
+  title: string;
+  price: number;
+  image?: string;
+  location?: string;
+  city?: string;
+  beds?: number;
+  baths?: number;
+  area?: number;
+  areaUnit?: string;
+  purpose?: string;
+}
+
+interface TrendingLocation {
+  location: string;
+  searchCount: number;
+}
+
+export default function HomePage() {
+  const router = useRouter();
+  const pathname = usePathname(); // key fix: re‑load data on route change
 
   // UI state
   const [currencyUI, setCurrencyUI] = useState<"PKR" | "USD">("PKR");
   const [showMoreOptions, setShowMoreOptions] = useState(false);
   const [currencyModalOpen, setCurrencyModalOpen] = useState(false);
   const [areaUnitModalOpen, setAreaUnitModalOpen] = useState(false);
-  const [selectedAreaUnit, setSelectedAreaUnit] = useState(areaUnits[0]); // default Sq. Ft.
+  const [selectedAreaUnit, setSelectedAreaUnit] = useState(areaUnits[0]);
 
-  // Local filter state (only applied on Find)
+  // Filter state
   const [localCity, setLocalCity] = useState<string | null>("Gujranwala");
-  const [localLocations, setLocalLocations] = useState<string[]>([]);
+  const [localLocation, setLocalLocation] = useState<string | null>(null);
   const [localPropertyType, setLocalPropertyType] = useState<string | null>(
     "HOUSE",
   );
@@ -119,20 +160,59 @@ export default function Home() {
   const [localAreaMin, setLocalAreaMin] = useState<number>(0);
   const [localAreaMax, setLocalAreaMax] = useState<number>(10000);
   const [localBeds, setLocalBeds] = useState<string>("All");
+  const [localBaths, setLocalBaths] = useState<string>("All");
   const [localSearchTerm, setLocalSearchTerm] = useState<string>("");
-  const [clientTypeFilter, setClientTypeFilter] = useState<string | null>(
-    "HOUSE",
-  );
 
-  // Location suggestions
-  const [locationInput, setLocationInput] = useState("");
+  // Data states
+  const [recentSearches, setRecentSearches] = useState<SavedSearch[]>([]);
+  const [viewedProperties, setViewedProperties] = useState<ViewedProperty[]>(
+    [],
+  );
+  const [enrichedViewed, setEnrichedViewed] = useState<FullProperty[]>([]);
+  const [enrichingViewed, setEnrichingViewed] = useState(false);
+  const [popularLocations, setPopularLocations] = useState<TrendingLocation[]>(
+    [],
+  );
+  const [loadingPopular, setLoadingPopular] = useState(false);
   const [locationOptions, setLocationOptions] = useState<string[]>([]);
+  const [locationInput, setLocationInput] = useState("");
   const debouncedLocation = useDebounce(locationInput, 300);
 
-  // Fetch location suggestions
+  // ------------------------------------------------------------------
+  // Load data from localStorage on mount AND whenever pathname changes
+  // ------------------------------------------------------------------
+  const loadLocalData = useCallback(() => {
+    try {
+      const storedSearches = localStorage.getItem(STORAGE_KEYS.RECENT_SEARCHES);
+      if (storedSearches)
+        setRecentSearches(JSON.parse(storedSearches).slice(0, 10));
+    } catch (e) {
+      console.error(e);
+    }
+    try {
+      const storedViewed = localStorage.getItem(STORAGE_KEYS.VIEWED_PROPERTIES);
+      if (storedViewed)
+        setViewedProperties(JSON.parse(storedViewed).slice(0, 12));
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadLocalData();
+  }, [pathname, loadLocalData]); // runs on every route change
+
+  // Listen for custom event from PropertyCard to refresh immediately
+  useEffect(() => {
+    const handler = () => loadLocalData();
+    window.addEventListener("viewed-property-updated", handler);
+    return () => window.removeEventListener("viewed-property-updated", handler);
+  }, [loadLocalData]);
+
+  // Location suggestions
   useEffect(() => {
     if (!localCity || !debouncedLocation) {
-      setLocationOptions([]);
+      if (locationOptions.length !== 0) setLocationOptions([]);
       return;
     }
     const fetchLocations = async () => {
@@ -145,71 +225,197 @@ export default function Home() {
             size: 10,
           },
         });
-        setLocationOptions(res.data.items || []);
+        setLocationOptions(res.data?.data?.items || []);
       } catch (err) {
-        console.error("Location suggestions failed", err);
+        console.error(err);
       }
     };
     fetchLocations();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localCity, debouncedLocation]);
 
+  // Fetch popular locations once
+  useEffect(() => {
+    const fetchPopular = async () => {
+      setLoadingPopular(true);
+      try {
+        const res = await api.get("/api/Property/trending/locations", {
+          params: { top: 30 },
+        });
+        const locations = res.data?.data || res.data;
+        if (Array.isArray(locations)) setPopularLocations(locations);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoadingPopular(false);
+      }
+    };
+    fetchPopular();
+  }, []);
+
+  // Fetch full property details for recently viewed
+  useEffect(() => {
+    if (!viewedProperties.length) {
+      setEnrichedViewed([]);
+      return;
+    }
+    const fetchDetails = async () => {
+      setEnrichingViewed(true);
+      try {
+        const details = await Promise.all(
+          viewedProperties.map(async (vp) => {
+            try {
+              const res = await api.get(`/api/Property/${vp.id}`);
+              const d = res.data?.data || res.data;
+              return {
+                id: d.id || vp.id,
+                title: d.title || vp.title,
+                price: d.price || vp.price,
+                image: d.images?.[0]?.url || d.image || vp.image || undefined,
+                location: d.location,
+                city: d.city,
+                beds: d.beds,
+                baths: d.baths,
+                area: d.area,
+                areaUnit: d.areaUnit,
+                purpose: d.purpose,
+              };
+            } catch {
+              return {
+                id: vp.id,
+                title: vp.title,
+                price: vp.price,
+                image: vp.image,
+              };
+            }
+          }),
+        );
+        setEnrichedViewed(details);
+      } catch (err) {
+        console.error("Enrich failed", err);
+        setEnrichedViewed(
+          viewedProperties.map((vp) => ({
+            id: vp.id,
+            title: vp.title,
+            price: vp.price,
+            image: vp.image,
+          })),
+        );
+      } finally {
+        setEnrichingViewed(false);
+      }
+    };
+    fetchDetails();
+  }, [viewedProperties]);
+
+  // Build query string
+  const buildQueryString = useCallback(() => {
+    const params = new URLSearchParams();
+    if (localCity) params.set("city", localCity);
+    if (localLocation) params.set("location", localLocation);
+    if (localPropertyType && localPropertyType !== "HOUSE")
+      params.set("type", localPropertyType);
+    if (localPropertyPurpose) params.set("purpose", localPropertyPurpose);
+    if (localPriceMin > 0) params.set("minPrice", localPriceMin.toString());
+    if (localPriceMax < MAX_PRICE)
+      params.set("maxPrice", localPriceMax.toString());
+    if (localAreaMin > 0) params.set("minArea", localAreaMin.toString());
+    if (localAreaMax < 10000) params.set("maxArea", localAreaMax.toString());
+    if (selectedAreaUnit.value !== "SQUARE_FEET")
+      params.set("areaUnit", selectedAreaUnit.value);
+    if (localBeds !== "All") params.set("beds", localBeds);
+    if (localBaths !== "All") params.set("baths", localBaths);
+    if (localSearchTerm) params.set("q", localSearchTerm);
+    return params.toString();
+  }, [
+    localCity,
+    localLocation,
+    localPropertyType,
+    localPropertyPurpose,
+    localPriceMin,
+    localPriceMax,
+    localAreaMin,
+    localAreaMax,
+    selectedAreaUnit,
+    localBeds,
+    localBaths,
+    localSearchTerm,
+  ]);
+
+  const saveSearchAndNavigate = (
+    queryString: string,
+    displayText: string,
+    city?: string,
+    location?: string,
+  ) => {
+    const newSearch: SavedSearch = {
+      query: queryString,
+      timestamp: Date.now(),
+      displayText,
+      city,
+      location,
+      priceMin: localPriceMin === 0 ? undefined : localPriceMin,
+      priceMax: localPriceMax === MAX_PRICE ? undefined : localPriceMax,
+    };
+    const updated = [
+      newSearch,
+      ...recentSearches.filter((s) => s.query !== queryString),
+    ].slice(0, 10);
+    setRecentSearches(updated);
+    localStorage.setItem(STORAGE_KEYS.RECENT_SEARCHES, JSON.stringify(updated));
+    router.push(`/properties?${queryString}`);
+  };
+
   const logSearch = async () => {
-    const locationToLog = localLocations[0] || (localCity ? localCity : null);
+    const locationToLog = localLocation || localCity;
     if (!locationToLog) return;
     try {
-      await api.post("/api/searchlog", {
+      await api.post("/api/SearchLog", {
         location: locationToLog,
         city: localCity || undefined,
-        propertyType: localPropertyType || undefined,
-        propertyPurpose: localPropertyPurpose || undefined,
+        propertyType: localPropertyType,
+        propertyPurpose: localPropertyPurpose,
       });
     } catch (err) {
       console.debug("Failed to log search", err);
     }
   };
 
-  const handleSearch = () => {
+  const handleFind = () => {
+    const queryString = buildQueryString();
+    let display = "";
+    if (localLocation) display += localLocation;
+    else if (localCity) display += localCity;
+    if (localPropertyType && localPropertyType !== "HOUSE")
+      display += ` ${localPropertyType.toLowerCase()}`;
+    display += localPropertyPurpose === "BUY" ? " for sale" : " for rent";
     logSearch();
-    const minAreaSqFt = localAreaMin * selectedAreaUnit.factor;
-    const maxAreaSqFt = localAreaMax * selectedAreaUnit.factor;
+    saveSearchAndNavigate(
+      queryString,
+      display,
+      localCity || undefined,
+      localLocation || undefined,
+    );
+  };
 
-    const newFilters: Partial<PropertyFilterParams> = {
-      Page: 1,
-      PageSize: 9,
-      SortBy: "CreatedAt",
-      IsDescending: true,
-      City: localCity || undefined,
-      Location: localLocations.length > 0 ? localLocations[0] : undefined,
-      PropertyType:
-        localPropertyType === "HOUSE"
-          ? undefined
-          : localPropertyType || undefined,
-      PropertyPurpose: localPropertyPurpose || undefined,
-      MinPrice: localPriceMin === 0 ? undefined : localPriceMin,
-      MaxPrice: localPriceMax === MAX_PRICE ? undefined : localPriceMax,
-      MinAreaSize: localAreaMin === 0 ? undefined : minAreaSqFt,
-      MaxAreaSize: localAreaMax === 10000 ? undefined : maxAreaSqFt,
-      SearchTerm: localSearchTerm || undefined,
-    };
-    if (localBeds === "All") {
-      newFilters.MinBedrooms = undefined;
-      newFilters.MaxBedrooms = undefined;
-    } else if (localBeds === "10+") {
-      newFilters.MinBedrooms = 10;
-      newFilters.MaxBedrooms = undefined;
-    } else {
-      const num = parseInt(localBeds, 10);
-      newFilters.MinBedrooms = num;
-      newFilters.MaxBedrooms = num;
-    }
-    setFilters(newFilters);
-    refetch();
+  const handleLocationClick = (location: string) => {
+    router.push(
+      `/properties?location=${encodeURIComponent(location)}&purpose=BUY`,
+    );
+  };
+
+  const handleClearRecent = () => {
+    setRecentSearches([]);
+    localStorage.removeItem(STORAGE_KEYS.RECENT_SEARCHES);
+  };
+
+  const handleClearViewed = () => {
+    setViewedProperties([]);
+    localStorage.removeItem(STORAGE_KEYS.VIEWED_PROPERTIES);
   };
 
   const handleReset = () => {
     setLocalCity("Gujranwala");
-    setLocalLocations([]);
+    setLocalLocation(null);
     setLocalPropertyType("HOUSE");
     setLocalPropertyPurpose("BUY");
     setLocalPriceMin(0);
@@ -217,74 +423,43 @@ export default function Home() {
     setLocalAreaMin(0);
     setLocalAreaMax(10000);
     setLocalBeds("All");
+    setLocalBaths("All");
     setLocalSearchTerm("");
-    setClientTypeFilter("HOUSE");
-    setLocationInput("");
     setSelectedAreaUnit(areaUnits[0]);
-    setFilters({
-      Page: 1,
-      PageSize: 9,
-      SortBy: "CreatedAt",
-      IsDescending: true,
-      City: "Gujranwala",
-      Location: undefined,
-      PropertyType: undefined,
-      PropertyPurpose: "BUY",
-      MinPrice: undefined,
-      MaxPrice: undefined,
-      MinBedrooms: undefined,
-      MaxBedrooms: undefined,
-      MinAreaSize: undefined,
-      MaxAreaSize: undefined,
-      SearchTerm: "",
-    });
-    refetch();
   };
 
-  const handleBuyRent = (value: string | null) => {
-    if (value === "BUY") setLocalPropertyPurpose("BUY");
-    else if (value === "RENT") setLocalPropertyPurpose("RENT");
-    else setLocalPropertyPurpose(null);
+  const highlightText = (text: string, query: string) => {
+    if (!query) return text;
+    const idx = text.toLowerCase().indexOf(query.toLowerCase());
+    if (idx === -1) return text;
+    return (
+      <span>
+        {text.slice(0, idx)}
+        <strong style={{ backgroundColor: "#ffeb3b" }}>
+          {text.slice(idx, idx + query.length)}
+        </strong>
+        {text.slice(idx + query.length)}
+      </span>
+    );
   };
 
   const formatPrice = (price: number) => {
-    const converted = currencyUI === "USD" ? price * USD_RATE : price;
-    const symbol = currencyUI === "USD" ? "$" : "PKR";
-    if (converted >= 10_000_000)
-      return `${symbol} ${(converted / 10_000_000).toFixed(1)}Cr`;
-    if (converted >= 100_000)
-      return `${symbol} ${(converted / 100_000).toFixed(1)}L`;
-    return `${symbol} ${converted.toLocaleString()}`;
+    if (price >= 1e7) return `${(price / 1e7).toFixed(1)} Crore`;
+    if (price >= 1e5) return `${(price / 1e5).toFixed(1)} Lakh`;
+    return price.toLocaleString();
   };
 
-  const displayItems = useMemo(() => {
-    if (!data?.items) return [];
-    if (!clientTypeFilter) return data.items;
-    return data.items.filter((p) => p.propertyType === clientTypeFilter);
-  }, [data, clientTypeFilter]);
-
-  const buyRentValue =
-    localPropertyPurpose === "BUY"
-      ? "BUY"
-      : localPropertyPurpose === "RENT"
-        ? "RENT"
-        : null;
-
-  // Area preset handlers
-  const setAreaMinPreset = (val: number) => setLocalAreaMin(val);
-  const setAreaMaxPreset = (val: number) => setLocalAreaMax(val);
-
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+    <Box sx={{ minHeight: "100vh" }}>
       {/* Hero Section */}
       <Box
         sx={{
-          position: "relative",
           pt: 28,
-          pb: { xs: 5, md: 6 },
+          pb: 6,
           backgroundImage: "url('/real-estate-bg.jpg')",
           backgroundSize: "cover",
           backgroundPosition: "center",
+          position: "relative",
           "&::before": {
             content: '""',
             position: "absolute",
@@ -309,68 +484,78 @@ export default function Home() {
           >
             Search properties for sale in Pakistan
           </Typography>
-
-          <Paper elevation={3} sx={{ p: 2, borderRadius: 3, mt: 4 }}>
-            {/* Buy/Rent Toggle */}
+          <Paper
+            elevation={6}
+            sx={{
+              p: 2,
+              borderRadius: 4,
+              mt: 4,
+              background: "rgba(255,255,255,0.95)",
+              backdropFilter: "blur(4px)",
+              border: "1px solid rgba(255,255,255,0.3)",
+            }}
+          >
+            {/* Buy/Rent toggle */}
             <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
-              <Box sx={{ display: "flex", gap: 2 }}>
+              <Stack direction="row" spacing={2}>
                 <Button
-                  variant={buyRentValue === "BUY" ? "contained" : "outlined"}
-                  onClick={() => handleBuyRent("BUY")}
+                  variant={
+                    localPropertyPurpose === "BUY" ? "contained" : "outlined"
+                  }
+                  onClick={() => setLocalPropertyPurpose("BUY")}
                   sx={{
                     textTransform: "none",
-                    borderRadius: 2,
                     px: 4,
-                    py: 0.75,
+                    fontWeight: 600,
+                    borderRadius: 2,
                   }}
                 >
                   Buy
                 </Button>
                 <Button
-                  variant={buyRentValue === "RENT" ? "contained" : "outlined"}
-                  onClick={() => handleBuyRent("RENT")}
+                  variant={
+                    localPropertyPurpose === "RENT" ? "contained" : "outlined"
+                  }
+                  onClick={() => setLocalPropertyPurpose("RENT")}
                   sx={{
                     textTransform: "none",
-                    borderRadius: 2,
                     px: 4,
-                    py: 0.75,
+                    fontWeight: 600,
+                    borderRadius: 2,
                   }}
                 >
                   Rent
                 </Button>
-              </Box>
+              </Stack>
             </Box>
 
             <Grid container spacing={2}>
-              {/* City */}
               <Grid size={{ xs: 12, sm: 6, md: 2.5 }}>
                 <Autocomplete
                   freeSolo
                   options={CITIES}
                   value={localCity || ""}
-                  onInputChange={(_, newValue) =>
-                    setLocalCity(newValue || null)
-                  }
-                  renderInput={(params) => (
-                    <TextField {...params} label="City" size="small" />
+                  onInputChange={(_, v) => setLocalCity(v || null)}
+                  renderInput={(p) => (
+                    <TextField {...p} label="City" size="small" />
                   )}
                 />
               </Grid>
-
-              {/* Location (multiple chips) */}
               <Grid size={{ xs: 12, sm: 6, md: 3.5 }}>
                 <Autocomplete
-                  multiple
                   freeSolo
                   options={locationOptions}
-                  value={localLocations}
-                  onInputChange={(_, newInputValue) =>
-                    setLocationInput(newInputValue)
-                  }
-                  onChange={(_, newValue) => setLocalLocations(newValue)}
-                  renderInput={(params) => (
+                  value={localLocation || ""}
+                  onInputChange={(_, v) => setLocationInput(v)}
+                  onChange={(_, v) => setLocalLocation(v)}
+                  renderOption={(props, opt) => (
+                    <li {...props} key={opt}>
+                      {highlightText(opt, locationInput)}
+                    </li>
+                  )}
+                  renderInput={(p) => (
                     <TextField
-                      {...params}
+                      {...p}
                       label="Location"
                       size="small"
                       placeholder="Location"
@@ -378,46 +563,40 @@ export default function Home() {
                   )}
                 />
               </Grid>
-
-              {/* Property Type */}
               <Grid size={{ xs: 12, sm: 6, md: 2 }}>
                 <FormControl fullWidth size="small">
                   <InputLabel>Property Type</InputLabel>
                   <Select
                     value={localPropertyType || "HOUSE"}
                     label="Property Type"
-                    onChange={(e) =>
-                      setLocalPropertyType(e.target.value as string)
-                    }
+                    onChange={(e) => setLocalPropertyType(e.target.value)}
                   >
-                    <MenuItem value="HOUSE">House</MenuItem>
-                    <MenuItem value="FLAT">Flat</MenuItem>
-                    <MenuItem value="COMMERCIAL">Commercial</MenuItem>
-                    <MenuItem value="SHOP">Shop</MenuItem>
+                    {propertyTypeOptions.map((type) => (
+                      <MenuItem key={type} value={type}>
+                        {type.charAt(0) + type.slice(1).toLowerCase()}
+                      </MenuItem>
+                    ))}
                   </Select>
                 </FormControl>
               </Grid>
-
-              {/* Find Button */}
               <Grid size={{ xs: 12, sm: 6, md: 2 }}>
                 <Button
                   fullWidth
                   variant="contained"
-                  onClick={handleSearch}
+                  onClick={handleFind}
                   sx={{
-                    backgroundColor: "#f59e0b",
-                    "&:hover": { backgroundColor: "#d97706" },
+                    bgcolor: "#f59e0b",
+                    "&:hover": { bgcolor: "#d97706" },
                     textTransform: "none",
                     fontWeight: 600,
                     py: 0.75,
+                    borderRadius: 2,
                   }}
                   startIcon={<SearchIcon />}
                 >
                   Find
                 </Button>
               </Grid>
-
-              {/* More/Less Options */}
               <Grid size={{ xs: 12, md: 2 }} sx={{ textAlign: "right" }}>
                 <Button
                   size="small"
@@ -441,29 +620,26 @@ export default function Home() {
                 }}
               >
                 <Grid container spacing={3}>
-                  {/* Price Range */}
                   <Grid size={{ xs: 12, md: 6 }}>
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    <Typography variant="subtitle2" gutterBottom>
                       Price Range ({currencyUI})
                     </Typography>
                     <Slider
                       value={[localPriceMin, localPriceMax]}
-                      onChange={(_, newValue) => {
-                        const [min, max] = newValue as number[];
-                        setLocalPriceMin(min);
-                        setLocalPriceMax(max);
+                      onChange={(_, v) => {
+                        const [a, b] = v as number[];
+                        setLocalPriceMin(a);
+                        setLocalPriceMax(b);
                       }}
                       min={0}
                       max={MAX_PRICE}
                       step={1_000_000}
                       valueLabelDisplay="auto"
-                      valueLabelFormat={(v) =>
-                        `${(v / 10_000_000).toFixed(1)}Cr`
-                      }
+                      valueLabelFormat={(v) => `${(v / 1e7).toFixed(1)}Cr`}
                     />
                     <Box sx={{ display: "flex", gap: 2, mt: 1 }}>
                       <TextField
-                        label="Min Price"
+                        label="Min"
                         size="small"
                         type="number"
                         value={localPriceMin}
@@ -473,7 +649,7 @@ export default function Home() {
                         fullWidth
                       />
                       <TextField
-                        label="Max Price"
+                        label="Max"
                         size="small"
                         type="number"
                         value={localPriceMax}
@@ -491,10 +667,8 @@ export default function Home() {
                       </Button>
                     </Box>
                   </Grid>
-
-                  {/* Area Range */}
                   <Grid size={{ xs: 12, md: 6 }}>
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    <Typography variant="subtitle2" gutterBottom>
                       Area ({selectedAreaUnit.label})
                     </Typography>
                     <Box sx={{ display: "flex", gap: 2, mb: 1 }}>
@@ -504,16 +678,16 @@ export default function Home() {
                         value={
                           localAreaMin === 0 ? "" : localAreaMin.toString()
                         }
-                        onInputChange={(_, newValue) => {
-                          let num = parseFloat(newValue);
-                          if (isNaN(num)) num = 0;
-                          if (num < 0) num = 0;
-                          setLocalAreaMin(num);
+                        onInputChange={(_, v) => {
+                          let n = parseFloat(v);
+                          if (isNaN(n)) n = 0;
+                          if (n < 0) n = 0;
+                          setLocalAreaMin(n);
                         }}
-                        renderInput={(params) => (
+                        renderInput={(p) => (
                           <TextField
-                            {...params}
-                            label="Min Area"
+                            {...p}
+                            label="Min"
                             size="small"
                             type="number"
                           />
@@ -528,16 +702,16 @@ export default function Home() {
                         value={
                           localAreaMax === 10000 ? "" : localAreaMax.toString()
                         }
-                        onInputChange={(_, newValue) => {
-                          let num = parseFloat(newValue);
-                          if (isNaN(num)) num = 10000;
-                          if (num < 0) num = 0;
-                          setLocalAreaMax(num);
+                        onInputChange={(_, v) => {
+                          let n = parseFloat(v);
+                          if (isNaN(n)) n = 10000;
+                          if (n < 0) n = 0;
+                          setLocalAreaMax(n);
                         }}
-                        renderInput={(params) => (
+                        renderInput={(p) => (
                           <TextField
-                            {...params}
-                            label="Max Area"
+                            {...p}
+                            label="Max"
                             size="small"
                             type="number"
                           />
@@ -546,8 +720,6 @@ export default function Home() {
                       />
                     </Box>
                   </Grid>
-
-                  {/* Beds Dropdown */}
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <FormControl fullWidth size="small">
                       <InputLabel>Beds</InputLabel>
@@ -556,17 +728,31 @@ export default function Home() {
                         label="Beds"
                         onChange={(e) => setLocalBeds(e.target.value)}
                       >
-                        {bedOptions.map((opt) => (
-                          <MenuItem key={opt} value={opt}>
-                            {opt}
+                        {bedOptions.map((o) => (
+                          <MenuItem key={o} value={o}>
+                            {o}
                           </MenuItem>
                         ))}
                       </Select>
                     </FormControl>
                   </Grid>
-
-                  {/* Keyword Search */}
                   <Grid size={{ xs: 12, sm: 6 }}>
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Bathrooms</InputLabel>
+                      <Select
+                        value={localBaths}
+                        label="Bathrooms"
+                        onChange={(e) => setLocalBaths(e.target.value)}
+                      >
+                        {bathOptions.map((o) => (
+                          <MenuItem key={o} value={o}>
+                            {o}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid size={{ xs: 12 }}>
                     <TextField
                       fullWidth
                       label="Keyword"
@@ -575,7 +761,6 @@ export default function Home() {
                       onChange={(e) => setLocalSearchTerm(e.target.value)}
                     />
                   </Grid>
-
                   <Grid size={{ xs: 12 }} sx={{ textAlign: "right" }}>
                     <Button size="small" variant="text" onClick={handleReset}>
                       Reset All Filters
@@ -585,7 +770,6 @@ export default function Home() {
               </Box>
             </Collapse>
 
-            {/* Footer buttons */}
             <Box
               sx={{
                 display: "flex",
@@ -616,114 +800,328 @@ export default function Home() {
         </Container>
       </Box>
 
-      {/* Results Summary */}
-      <Container maxWidth="lg" sx={{ mt: 3, mb: 1 }}>
-        {data && !loading && (
+      <Container maxWidth="lg" sx={{ mt: 5, mb: 8 }}>
+        {/* Browse Properties Carousel (hidden scrollbar) */}
+        <Box sx={{ mb: 5 }}>
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
+            Browse Properties
+          </Typography>
           <Box
             sx={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              flexWrap: "wrap",
-              gap: 1,
+              "& *::-webkit-scrollbar": { display: "none" },
+              "& *": { scrollbarWidth: "none", msOverflowStyle: "none" },
             }}
           >
-            <Typography variant="subtitle2" sx={{ fontWeight: 500 }}>
-              {displayItems.length} properties found
-            </Typography>
-            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
-              <Chip
-                label="All"
-                size="small"
-                variant={clientTypeFilter === null ? "filled" : "outlined"}
-                color={clientTypeFilter === null ? "primary" : "default"}
-                onClick={() => setClientTypeFilter(null)}
-                clickable
-              />
-              <Chip
-                label="House"
-                size="small"
-                variant={clientTypeFilter === "HOUSE" ? "filled" : "outlined"}
-                color={clientTypeFilter === "HOUSE" ? "primary" : "default"}
-                onClick={() => setClientTypeFilter("HOUSE")}
-                clickable
-              />
-              <Chip
-                label="Flat"
-                size="small"
-                variant={clientTypeFilter === "FLAT" ? "filled" : "outlined"}
-                color={clientTypeFilter === "FLAT" ? "primary" : "default"}
-                onClick={() => setClientTypeFilter("FLAT")}
-                clickable
-              />
-              <Chip
-                label="Commercial"
-                size="small"
-                variant={
-                  clientTypeFilter === "COMMERCIAL" ? "filled" : "outlined"
-                }
-                color={
-                  clientTypeFilter === "COMMERCIAL" ? "primary" : "default"
-                }
-                onClick={() => setClientTypeFilter("COMMERCIAL")}
-                clickable
-              />
-              <Chip
-                label="Shop"
-                size="small"
-                variant={clientTypeFilter === "SHOP" ? "filled" : "outlined"}
-                color={clientTypeFilter === "SHOP" ? "primary" : "default"}
-                onClick={() => setClientTypeFilter("SHOP")}
-                clickable
-              />
-            </Stack>
+            <BrowsePropertiesCarousel />
           </Box>
-        )}
-      </Container>
+        </Box>
 
-      {/* Property Grid */}
-      <Container maxWidth="lg" sx={{ mb: 5 }}>
-        {loading ? (
-          <Grid container spacing={3}>
-            {Array.from(new Array(6)).map((_, idx) => (
-              <Grid size={{ xs: 12, sm: 6, md: 4 }} key={idx}>
-                <PropertyCardSkeleton />
-              </Grid>
-            ))}
-          </Grid>
-        ) : error ? (
-          <Alert severity="error">{error}</Alert>
-        ) : displayItems.length === 0 ? (
-          <Typography
-            sx={{ textAlign: "center", color: "text.secondary", py: 6 }}
-          >
-            No properties found. Try adjusting your filters.
-          </Typography>
-        ) : (
-          <>
-            <Grid container spacing={3}>
-              {displayItems.map((property) => (
-                <Grid size={{ xs: 12, sm: 6, md: 4 }} key={property.id}>
-                  <PropertyCard property={property} formatPrice={formatPrice} />
+        {/* Recent Searches – Beautiful Cards */}
+        {recentSearches.length > 0 && (
+          <Box sx={{ mb: 5 }}>
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                mb: 2,
+              }}
+            >
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                <HistoryIcon sx={{ mr: 1, verticalAlign: "middle" }} /> Recent
+                Searches
+              </Typography>
+              <Button
+                size="small"
+                startIcon={<DeleteIcon />}
+                onClick={handleClearRecent}
+                sx={{ textTransform: "none" }}
+              >
+                Clear
+              </Button>
+            </Box>
+            <Grid container spacing={2}>
+              {recentSearches.map((search, idx) => (
+                <Grid size={{ xs: 12, sm: 6, md: 4 }} key={idx}>
+                  <Card
+                    sx={{
+                      borderRadius: 3,
+                      transition: "box-shadow 0.2s, transform 0.2s",
+                      "&:hover": {
+                        boxShadow: 6,
+                        transform: "translateY(-2px)",
+                      },
+                      height: "100%",
+                    }}
+                  >
+                    <CardActionArea
+                      onClick={() => router.push(`/properties?${search.query}`)}
+                      sx={{
+                        p: 2,
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "flex-start",
+                        gap: 1,
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 1,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <SearchIcon fontSize="small" color="action" />
+                        <Typography variant="subtitle1" fontWeight={600}>
+                          {search.displayText}
+                        </Typography>
+                      </Box>
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        sx={{ mt: 0.5, flexWrap: "wrap", rowGap: 0.5 }}
+                      >
+                        {search.city && (
+                          <Chip
+                            size="small"
+                            icon={<LocationOnIcon />}
+                            label={search.city}
+                            variant="outlined"
+                            color="primary"
+                          />
+                        )}
+                        {search.priceMin !== undefined &&
+                          search.priceMax !== undefined && (
+                            <Chip
+                              size="small"
+                              icon={<AttachMoneyIcon />}
+                              label={`PKR ${(search.priceMin / 1e6).toFixed(1)}M - ${(search.priceMax / 1e6).toFixed(1)}M`}
+                              variant="outlined"
+                              color="secondary"
+                            />
+                          )}
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ ml: "auto" }}
+                        >
+                          {new Date(search.timestamp).toLocaleDateString()}
+                        </Typography>
+                      </Stack>
+                    </CardActionArea>
+                  </Card>
                 </Grid>
               ))}
             </Grid>
-            {data && data.totalCount > 0 && (
-              <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
-                <Pagination
-                  count={Math.ceil(data.totalCount / data.pageSize)}
-                  page={data.page}
-                  onChange={(_, page) => {
-                    setFilters((prev) => ({ ...prev, Page: page }));
-                    refetch();
-                  }}
-                  color="primary"
-                  size="medium"
-                />
-              </Box>
-            )}
-          </>
+          </Box>
         )}
+
+        {/* Recently Viewed – full property cards */}
+        {viewedProperties.length > 0 && (
+          <Box sx={{ mb: 5 }}>
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                mb: 2,
+              }}
+            >
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                <HistoryIcon sx={{ mr: 1, verticalAlign: "middle" }} /> Recently
+                Viewed
+              </Typography>
+              <Button
+                size="small"
+                startIcon={<DeleteIcon />}
+                onClick={handleClearViewed}
+                sx={{ textTransform: "none" }}
+              >
+                Clear
+              </Button>
+            </Box>
+            {enrichingViewed ? (
+              <Grid container spacing={3}>
+                {[1, 2, 3, 4].map((i) => (
+                  <Grid size={{ xs: 6, sm: 4, md: 3 }} key={i}>
+                    <Skeleton
+                      variant="rectangular"
+                      height={180}
+                      sx={{ borderRadius: 2 }}
+                    />
+                    <Skeleton variant="text" sx={{ mt: 1 }} />
+                    <Skeleton variant="text" width="60%" />
+                  </Grid>
+                ))}
+              </Grid>
+            ) : (
+              <Grid container spacing={3}>
+                {enrichedViewed.map((prop) => (
+                  <Grid size={{ xs: 6, sm: 4, md: 3 }} key={prop.id}>
+                    <Card
+                      sx={{
+                        height: "100%",
+                        borderRadius: 3,
+                        transition: "box-shadow 0.2s, transform 0.2s",
+                        "&:hover": {
+                          boxShadow: 6,
+                          transform: "translateY(-2px)",
+                        },
+                        cursor: "pointer",
+                      }}
+                      onClick={() => router.push(`/properties/${prop.id}`)}
+                    >
+                      <Box
+                        sx={{
+                          position: "relative",
+                          width: "100%",
+                          height: 160,
+                        }}
+                      >
+                        <CardMedia
+                          component="img"
+                          height="160"
+                          image={prop.image || "/placeholder-property.jpg"}
+                          alt={prop.title}
+                          sx={{ objectFit: "cover" }}
+                        />
+                        {prop.purpose && (
+                          <Chip
+                            label={prop.purpose === "RENT" ? "Rent" : "Sale"}
+                            size="small"
+                            color={
+                              prop.purpose === "RENT" ? "secondary" : "primary"
+                            }
+                            sx={{
+                              position: "absolute",
+                              top: 8,
+                              left: 8,
+                              fontWeight: 600,
+                            }}
+                          />
+                        )}
+                      </Box>
+                      <CardContent sx={{ pb: "12px !important" }}>
+                        <Typography
+                          variant="subtitle2"
+                          noWrap
+                          gutterBottom
+                          sx={{fontWeight:600}}
+                        >
+                          {prop.title}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          noWrap
+                        >
+                          {prop.location || prop.city}
+                          {prop.location && prop.city ? `, ${prop.city}` : ""}
+                        </Typography>
+                        <Stack
+                          direction="row"
+                          spacing={1}
+                          sx={{ mt: 0.5, flexWrap: "wrap", rowGap: 0.5 }}
+                        >
+                          {prop.beds != null && (
+                            <Chip
+                              label={`${prop.beds} Beds`}
+                              size="small"
+                              variant="outlined"
+                              sx={{ fontSize: "0.7rem" }}
+                            />
+                          )}
+                          {prop.baths != null && (
+                            <Chip
+                              label={`${prop.baths} Baths`}
+                              size="small"
+                              variant="outlined"
+                              sx={{ fontSize: "0.7rem" }}
+                            />
+                          )}
+                          {prop.area && (
+                            <Chip
+                              label={`${prop.area} ${prop.areaUnit || "sq ft"}`}
+                              size="small"
+                              variant="outlined"
+                              sx={{ fontSize: "0.7rem" }}
+                            />
+                          )}
+                        </Stack>
+                        <Typography
+                          variant="subtitle1"
+                          color="#f59e0b"
+                           sx={{fontWeight:700,mt:1}}
+                        >
+                          PKR {formatPrice(prop.price)}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
+            )}
+          </Box>
+        )}
+
+        {/* Popular Locations – Direct Cards */}
+        <Box sx={{ mb: 5 }}>
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
+            <TrendingUpIcon sx={{ mr: 1, verticalAlign: "middle" }} /> Popular
+            Locations
+          </Typography>
+          {loadingPopular ? (
+            <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+              <Skeleton
+                variant="rectangular"
+                width="100%"
+                height={200}
+                sx={{ borderRadius: 2 }}
+              />
+            </Box>
+          ) : popularLocations.length === 0 ? (
+            <Typography
+              color="text.secondary"
+              sx={{ textAlign: "center", py: 4 }}
+            >
+              No trending data yet.
+            </Typography>
+          ) : (
+            <Grid container spacing={2}>
+              {popularLocations.map((loc, idx) => (
+                <Grid size={{ xs: 6, sm: 4, md: 3 }} key={idx}>
+                  <Card
+                    sx={{
+                      borderRadius: 3,
+                      transition: "box-shadow 0.2s, transform 0.2s",
+                      "&:hover": {
+                        boxShadow: 6,
+                        transform: "translateY(-2px)",
+                      },
+                      cursor: "pointer",
+                      height: "100%",
+                    }}
+                    onClick={() => handleLocationClick(loc.location)}
+                  >
+                    <CardContent sx={{ textAlign: "center", p: 2 }}>
+                      <LocationOnIcon
+                        color="primary"
+                        sx={{ fontSize: 32, mb: 1 }}
+                      />
+                      <Typography variant="subtitle1"   sx={{fontWeight:600}} noWrap>
+                        {loc.location}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {loc.searchCount.toLocaleString()} searches
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          )}
+        </Box>
       </Container>
 
       {/* Currency Modal */}
@@ -763,17 +1161,17 @@ export default function Home() {
           <RadioGroup
             value={selectedAreaUnit.value}
             onChange={(e) => {
-              const unit = areaUnits.find((u) => u.value === e.target.value);
-              if (unit) setSelectedAreaUnit(unit);
+              const u = areaUnits.find((u) => u.value === e.target.value);
+              if (u) setSelectedAreaUnit(u);
               setAreaUnitModalOpen(false);
             }}
           >
-            {areaUnits.map((unit) => (
+            {areaUnits.map((u) => (
               <FormControlLabel
-                key={unit.value}
-                value={unit.value}
+                key={u.value}
+                value={u.value}
                 control={<Radio />}
-                label={unit.label}
+                label={u.label}
               />
             ))}
           </RadioGroup>

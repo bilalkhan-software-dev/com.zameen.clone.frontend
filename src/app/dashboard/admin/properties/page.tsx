@@ -31,10 +31,12 @@ import {
 import DeleteIcon from "@mui/icons-material/Delete";
 import api from "@/lib/axios";
 import { PropertyResponse, PagedResult } from "@/lib/types";
+import { useSettings } from "@/context/SettingsContext";
 
 const PROPERTY_STATUSES = ["PENDING", "APPROVED", "REJECTED", "SOLD", "RENTED"];
 
 export default function AdminPropertiesPage() {
+  const { formatPrice, formatArea } = useSettings();
   const [properties, setProperties] =
     useState<PagedResult<PropertyResponse> | null>(null);
   const [loading, setLoading] = useState(true);
@@ -53,13 +55,10 @@ export default function AdminPropertiesPage() {
     setLoading(true);
     setError("");
     try {
-      // Use the admin endpoint to get all properties
       const res = await api.get("/api/admin/properties", {
         params: { page, size: pageSize, sortBy: "CreatedAt", isNewest: true },
       });
-      // if the response is ApiResponse<PagedResult>, res.data.data is the paged result
       let pagedData = res.data.data;
-      // Apply status filter client‑side (or you can add a parameter if the backend supports it)
       if (statusFilter) {
         pagedData = {
           ...pagedData,
@@ -91,7 +90,7 @@ export default function AdminPropertiesPage() {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
-      await api.delete(`/api/Property/${deleteTarget}`); // soft‑delete via public endpoint
+      await api.delete(`/api/Property/${deleteTarget}`);
       setDeleteTarget(null);
       fetchProperties();
     } catch (err: any) {
@@ -107,11 +106,12 @@ export default function AdminPropertiesPage() {
   const handleStatusChange = async () => {
     if (!statusTarget) return;
     try {
-      // Use the admin property status update endpoint
       await api.patch(
         `/api/admin/properties/${statusTarget.id}/status`,
         selectedStatus,
-        { headers: { "Content-Type": "application/json" } },
+        {
+          headers: { "Content-Type": "application/json" },
+        },
       );
       setStatusTarget(null);
       fetchProperties();
@@ -121,12 +121,12 @@ export default function AdminPropertiesPage() {
   };
 
   return (
-    <Container maxWidth="lg">
-      <Typography variant="h4" gutterBottom>
+    <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Typography variant="h4" gutterBottom sx={{ fontWeight: 700 }}>
         Property Management
       </Typography>
 
-      <Box sx={{ mb: 2 }}>
+      <Box sx={{ mb: 2, display: "flex", gap: 2, flexWrap: "wrap" }}>
         <FormControl size="small" sx={{ minWidth: 200 }}>
           <InputLabel>Status Filter</InputLabel>
           <Select
@@ -151,34 +151,65 @@ export default function AdminPropertiesPage() {
       )}
 
       {loading ? (
-        <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+        <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
           <CircularProgress />
         </Box>
       ) : !properties || properties.items.length === 0 ? (
         <Alert severity="info">No properties found.</Alert>
       ) : (
-        <Paper>
+        <Paper sx={{ borderRadius: 3, overflow: "hidden" }}>
           <Table>
             <TableHead>
               <TableRow>
                 <TableCell>Title</TableCell>
                 <TableCell>Agent</TableCell>
                 <TableCell>City</TableCell>
+                <TableCell>Type</TableCell>
+                <TableCell>Area</TableCell>
                 <TableCell>Price</TableCell>
+                <TableCell>Purpose</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell align="center">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {properties.items.map((property) => (
-                <TableRow key={property.id}>
-                  <TableCell>{property.title}</TableCell>
-                  <TableCell>{property.agentName}</TableCell>
+                <TableRow key={property.id} hover>
+                  <TableCell>
+                    <Typography variant="body2" fontWeight={600}>
+                      {property.title}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>{property.agentName || "-"}</TableCell>
                   <TableCell>{property.city}</TableCell>
-                  <TableCell>PKR {property.price.toLocaleString()}</TableCell>
+                  <TableCell>
+                    <Chip
+                      label={property.propertyType?.toLowerCase()}
+                      size="small"
+                      variant="outlined"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    {property.areaSize ? formatArea(property.areaSize) : "-"}
+                  </TableCell>
+                  <TableCell>{formatPrice(property.price)}</TableCell>
+                  <TableCell>
+                    <Chip
+                      label={
+                        property.propertyPurpose === "BUY" ? "Sale" : "Rent"
+                      }
+                      size="small"
+                      color={
+                        property.propertyPurpose === "BUY"
+                          ? "primary"
+                          : "secondary"
+                      }
+                    />
+                  </TableCell>
                   <TableCell>
                     <Chip
                       label={property.status}
+                      size="small"
                       color={
                         property.status === "APPROVED"
                           ? "success"
@@ -186,7 +217,6 @@ export default function AdminPropertiesPage() {
                             ? "warning"
                             : "default"
                       }
-                      size="small"
                     />
                   </TableCell>
                   <TableCell align="center">
@@ -194,6 +224,7 @@ export default function AdminPropertiesPage() {
                       size="small"
                       variant="outlined"
                       onClick={() => handleOpenStatusDialog(property)}
+                      sx={{ mr: 1 }}
                     >
                       Change Status
                     </Button>
@@ -213,12 +244,13 @@ export default function AdminPropertiesPage() {
               count={Math.ceil(properties.totalCount / pageSize)}
               page={page}
               onChange={(_, newPage) => setPage(newPage)}
+              color="primary"
             />
           </Box>
         </Paper>
       )}
 
-      {/* Delete / Status dialogs unchanged (just the API call inside handleStatusChange changed) */}
+      {/* Delete dialog */}
       <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)}>
         <DialogTitle>Delete Property?</DialogTitle>
         <DialogContent>
@@ -232,6 +264,7 @@ export default function AdminPropertiesPage() {
         </DialogActions>
       </Dialog>
 
+      {/* Status change dialog */}
       <Dialog open={!!statusTarget} onClose={() => setStatusTarget(null)}>
         <DialogTitle>Change Property Status</DialogTitle>
         <DialogContent>
@@ -243,9 +276,7 @@ export default function AdminPropertiesPage() {
             <Select
               value={selectedStatus}
               label="New Status"
-              onChange={(e: SelectChangeEvent) =>
-                setSelectedStatus(e.target.value)
-              }
+              onChange={(e) => setSelectedStatus(e.target.value)}
             >
               {PROPERTY_STATUSES.map((status) => (
                 <MenuItem key={status} value={status}>
