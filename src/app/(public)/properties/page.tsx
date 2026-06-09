@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   Box,
@@ -29,16 +29,21 @@ import {
   RadioGroup,
   Radio,
   FormControlLabel,
+  ToggleButtonGroup,
+  ToggleButton,
+  InputAdornment,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import TuneIcon from "@mui/icons-material/Tune";
+import GridViewIcon from "@mui/icons-material/GridView";
+import ViewListIcon from "@mui/icons-material/ViewList";
+import ClearIcon from "@mui/icons-material/Clear";
 import { useProperties } from "@/hooks/useProperties";
-import { PropertyFilterParams } from "@/lib/types";
 import PropertyCard from "@/components/PropertyCard";
 import api from "@/lib/axios";
 
 // ----------------------------------------------------------------------
-// Constants & Helpers
+// Constants
 // ----------------------------------------------------------------------
 const CITIES = [
   "Islamabad",
@@ -63,6 +68,15 @@ const areaUnits = [
   { value: "KANAL", label: "Kanal", factor: 5445 },
 ];
 const areaPresetsSqFt = [0, 500, 1000, 2000, 5000, 10000];
+const propertyTypeOptions = [
+  "HOUSE",
+  "FLAT",
+  "PLOT",
+  "COMMERCIAL",
+  "SHOP",
+  "FACTORY",
+  "STUDIO",
+];
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -74,7 +88,7 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 const PropertyCardSkeleton = () => (
-  <Paper sx={{ borderRadius: 2, overflow: "hidden" }}>
+  <Paper sx={{ borderRadius: 3, overflow: "hidden", boxShadow: 1 }}>
     <Skeleton variant="rectangular" height={200} />
     <Box sx={{ p: 2 }}>
       <Skeleton variant="text" width="80%" />
@@ -85,7 +99,6 @@ const PropertyCardSkeleton = () => (
   </Paper>
 );
 
-// Helper to highlight text
 const highlightText = (text: string, query: string) => {
   if (!query) return text;
   const idx = text.toLowerCase().indexOf(query.toLowerCase());
@@ -104,19 +117,34 @@ const highlightText = (text: string, query: string) => {
   );
 };
 
-// Convert URLSearchParams to initial filter state
-function getInitialFiltersFromUrl(searchParams: URLSearchParams) {
+interface InitialFilters {
+  city: string;
+  location: string | null;
+  propertyType: string;
+  propertyPurpose: "BUY" | "RENT";
+  priceMin: number;
+  priceMax: number;
+  areaMin: number;
+  areaMax: number;
+  areaUnit: string;
+  beds: string;
+  baths: string;
+  keyword: string;
+  sortBy: string;
+  isDescending: boolean;
+  page: number;
+}
+
+function getInitialFiltersFromUrl(
+  searchParams: URLSearchParams,
+): InitialFilters {
   return {
     city: searchParams.get("city") || "Gujranwala",
     location: searchParams.get("location") || null,
-    propertyType:
-      (searchParams.get("type") as "HOUSE" | "FLAT" | "COMMERCIAL" | "SHOP") ||
-      "HOUSE",
+    propertyType: searchParams.get("type") || "HOUSE",
     propertyPurpose: (searchParams.get("purpose") === "BUY"
       ? "BUY"
-      : searchParams.get("purpose") === "RENT"
-        ? "RENT"
-        : "BUY") as "BUY" | "RENT",
+      : "RENT") as "BUY" | "RENT",
     priceMin: parseInt(searchParams.get("minPrice") || "0"),
     priceMax: parseInt(searchParams.get("maxPrice") || MAX_PRICE.toString()),
     areaMin: parseInt(searchParams.get("minArea") || "0"),
@@ -125,8 +153,9 @@ function getInitialFiltersFromUrl(searchParams: URLSearchParams) {
     beds: searchParams.get("beds") || "All",
     baths: searchParams.get("baths") || "All",
     keyword: searchParams.get("q") || "",
-    sortBy: "CreatedAt",
-    isDescending: true,
+    sortBy: searchParams.get("sortBy") || "CreatedAt",
+    isDescending: searchParams.get("order") !== "asc",
+    page: parseInt(searchParams.get("page") || "1"),
   };
 }
 
@@ -134,17 +163,17 @@ export default function PropertiesPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  // UI state
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [currencyUI, setCurrencyUI] = useState<"PKR" | "USD">("PKR");
   const [showMoreOptions, setShowMoreOptions] = useState(false);
   const [currencyModalOpen, setCurrencyModalOpen] = useState(false);
   const [areaUnitModalOpen, setAreaUnitModalOpen] = useState(false);
   const [selectedAreaUnit, setSelectedAreaUnit] = useState(areaUnits[0]);
 
-  // Filter state (initialised from URL)
+  // Local filter state
   const [localCity, setLocalCity] = useState<string>("Gujranwala");
   const [localLocation, setLocalLocation] = useState<string | null>(null);
-  const [localPropertyType, setLocalPropertyType] = useState<string>("HOUSE");
+  const [localPropertyType, setLocalPropertyType] = useState<string>("");
   const [localPropertyPurpose, setLocalPropertyPurpose] = useState<
     "BUY" | "RENT"
   >("BUY");
@@ -158,21 +187,71 @@ export default function PropertiesPage() {
   const [localSearchTerm, setLocalSearchTerm] = useState<string>("");
   const [localSortBy, setLocalSortBy] = useState<string>("CreatedAt");
   const [localIsDescending, setLocalIsDescending] = useState<boolean>(true);
-
-  // Client-side type filter (chips)
-  const [clientTypeFilter, setClientTypeFilter] = useState<string | null>(
-    "HOUSE",
-  );
+  const [currentPage, setCurrentPage] = useState<number>(1);
 
   // Location suggestions
   const [locationInput, setLocationInput] = useState("");
   const [locationOptions, setLocationOptions] = useState<string[]>([]);
   const debouncedLocation = useDebounce(locationInput, 300);
+  const initialLoadDone = useRef(false);
 
-  // Fetch location suggestions
+  // Read URL params once on mount
+
+useEffect(() => {
+  const initial = getInitialFiltersFromUrl(searchParams);
+
+  // Update all local state (so the UI reflects the URL)
+  setLocalCity(initial.city);
+  setLocalLocation(initial.location);
+  setLocalPropertyType(initial.propertyType);
+  setLocalPropertyPurpose(initial.propertyPurpose);
+  setLocalPriceMin(initial.priceMin);
+  setLocalPriceMax(initial.priceMax);
+  setLocalAreaMin(initial.areaMin);
+  setLocalAreaMax(initial.areaMax);
+  setLocalAreaUnit(initial.areaUnit);
+  setLocalBeds(initial.beds);
+  setLocalBaths(initial.baths);
+  setLocalSearchTerm(initial.keyword);
+  setLocalSortBy(initial.sortBy);
+  setLocalIsDescending(initial.isDescending);
+  setCurrentPage(initial.page);
+
+  const unit = areaUnits.find((u) => u.value === initial.areaUnit) || areaUnits[0];
+  setSelectedAreaUnit(unit);
+
+  // Build the API filters using the initial values (not state)
+  const apiFilters = {
+    Page: initial.page,
+    PageSize: 9,
+    City: initial.city === "Gujranwala" ? undefined : initial.city,
+    Location: initial.location || undefined,
+    PropertyType: initial.propertyType || undefined,
+    PropertyPurpose: initial.propertyPurpose,
+    MinPrice: initial.priceMin === 0 ? undefined : initial.priceMin,
+    MaxPrice: initial.priceMax === MAX_PRICE ? undefined : initial.priceMax,
+    MinAreaSize: initial.areaMin === 0 ? undefined : initial.areaMin * unit.factor,
+    MaxAreaSize: initial.areaMax === 10000 ? undefined : initial.areaMax * unit.factor,
+    SearchTerm: initial.keyword || undefined,
+    MinBedrooms: initial.beds === "All" ? undefined : initial.beds === "10+" ? 10 : parseInt(initial.beds, 10),
+    MaxBedrooms: initial.beds === "All" ? undefined : initial.beds === "10+" ? undefined : parseInt(initial.beds, 10),
+    MinBathrooms: initial.baths === "All" ? undefined : parseInt(initial.baths, 10),
+    MaxBathrooms: initial.baths === "All" ? undefined : parseInt(initial.baths, 10),
+    SortBy: initial.sortBy,
+    IsDescending: initial.isDescending,
+  };
+
+  // Trigger the initial fetch with the correct filters
+  setFilters(apiFilters);
+  refetch();
+
+  initialLoadDone.current = true;
+}, []); // runs only once on mount
+
+  // Fetch location suggestions – stable effect
   useEffect(() => {
     if (!localCity || !debouncedLocation) {
-      setLocationOptions([]);
+      if (locationOptions.length !== 0) setLocationOptions([]);
       return;
     }
     const fetchLocations = async () => {
@@ -185,46 +264,28 @@ export default function PropertiesPage() {
             size: 10,
           },
         });
-        setLocationOptions(res.data?.data?.items || []);
+        const items = res.data?.data?.items || [];
+        setLocationOptions(items);
       } catch (err) {
         console.error(err);
       }
     };
     fetchLocations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localCity, debouncedLocation]);
 
-  // Read URL params once on mount
-  useEffect(() => {
-    const initial = getInitialFiltersFromUrl(searchParams);
-    setLocalCity(initial.city);
-    setLocalLocation(initial.location);
-    setLocalPropertyType(initial.propertyType);
-    setLocalPropertyPurpose(initial.propertyPurpose);
-    setLocalPriceMin(initial.priceMin);
-    setLocalPriceMax(initial.priceMax);
-    setLocalAreaMin(initial.areaMin);
-    setLocalAreaMax(initial.areaMax);
-    setLocalAreaUnit(initial.areaUnit);
-    setLocalBeds(initial.beds);
-    setLocalBaths(initial.baths);
-    setLocalSearchTerm(initial.keyword);
-    const unit = areaUnits.find((u) => u.value === initial.areaUnit);
-    if (unit) setSelectedAreaUnit(unit);
-  }, [searchParams]);
-
-  // Build API filters from local state
+  // Build API filters (memoized)
   const buildApiFilters = useMemo(() => {
     const unit =
       areaUnits.find((u) => u.value === localAreaUnit) || areaUnits[0];
     const minAreaSqFt = localAreaMin * unit.factor;
     const maxAreaSqFt = localAreaMax * unit.factor;
     return {
-      Page: 1,
+      Page: currentPage,
       PageSize: 9,
       City: localCity === "Gujranwala" ? undefined : localCity,
       Location: localLocation || undefined,
-      PropertyType:
-        localPropertyType === "HOUSE" ? undefined : localPropertyType,
+      PropertyType: localPropertyType || undefined,
       PropertyPurpose: localPropertyPurpose,
       MinPrice: localPriceMin === 0 ? undefined : localPriceMin,
       MaxPrice: localPriceMax === MAX_PRICE ? undefined : localPriceMax,
@@ -263,6 +324,7 @@ export default function PropertiesPage() {
     localSearchTerm,
     localSortBy,
     localIsDescending,
+    currentPage,
   ]);
 
   const { data, loading, error, setFilters, refetch } = useProperties({
@@ -272,11 +334,7 @@ export default function PropertiesPage() {
     IsDescending: true,
   });
 
-  // Apply URL filters on mount
-  useEffect(() => {
-    setFilters(buildApiFilters);
-    refetch();
-  }, []); // runs once
+
 
   const formatPrice = (price: number) => {
     const converted = currencyUI === "USD" ? price * 0.0036 : price;
@@ -288,13 +346,9 @@ export default function PropertiesPage() {
     return `${symbol} ${converted.toLocaleString()}`;
   };
 
-  const displayItems = useMemo(() => {
-    if (!data?.items) return [];
-    if (!clientTypeFilter) return data.items;
-    return data.items.filter((p) => p.propertyType === clientTypeFilter);
-  }, [data, clientTypeFilter]);
+  const displayItems = data?.items || [];
 
-  const logSearch = async () => {
+  const logSearch = useCallback(async () => {
     const locationToLog = localLocation || localCity;
     if (!locationToLog) return;
     try {
@@ -307,22 +361,19 @@ export default function PropertiesPage() {
     } catch (err) {
       console.debug("Failed to log search", err);
     }
-  };
+  }, [localLocation, localCity, localPropertyType, localPropertyPurpose]);
 
-  const handleApplyFilters = () => {
-    // Log search before applying
+  const handleApplyFilters = useCallback(() => {
     logSearch();
-
-    // Update hook filters
-    setFilters(buildApiFilters);
-    refetch();
-
-    // Update URL for shareability
+    setCurrentPage(1);
+    setTimeout(() => {
+      setFilters(buildApiFilters);
+      refetch();
+    }, 0);
     const params = new URLSearchParams();
     if (localCity && localCity !== "Gujranwala") params.set("city", localCity);
     if (localLocation) params.set("location", localLocation);
-    if (localPropertyType && localPropertyType !== "HOUSE")
-      params.set("type", localPropertyType);
+    if (localPropertyType) params.set("type", localPropertyType);
     if (localPropertyPurpose) params.set("purpose", localPropertyPurpose);
     if (localPriceMin > 0) params.set("minPrice", localPriceMin.toString());
     if (localPriceMax < MAX_PRICE)
@@ -333,24 +384,72 @@ export default function PropertiesPage() {
     if (localBeds !== "All") params.set("beds", localBeds);
     if (localBaths !== "All") params.set("baths", localBaths);
     if (localSearchTerm) params.set("q", localSearchTerm);
+    if (localSortBy !== "CreatedAt") params.set("sortBy", localSortBy);
+    if (!localIsDescending) params.set("order", "asc");
+    params.set("page", "1");
+    router.push(`/properties?${params.toString()}`);
+  }, [
+    localCity,
+    localLocation,
+    localPropertyType,
+    localPropertyPurpose,
+    localPriceMin,
+    localPriceMax,
+    localAreaMin,
+    localAreaMax,
+    localAreaUnit,
+    localBeds,
+    localBaths,
+    localSearchTerm,
+    localSortBy,
+    localIsDescending,
+    logSearch,
+    buildApiFilters,
+    setFilters,
+    refetch,
+    router,
+  ]);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    const params = new URLSearchParams(window.location.search);
+    params.set("page", page.toString());
     router.push(`/properties?${params.toString()}`);
   };
 
-  const handleReset = () => {
+  const handleReset = useCallback(() => {
     router.push("/properties");
-  };
+    setCurrentPage(1);
+    setLocalCity("Gujranwala");
+    setLocalLocation(null);
+    setLocalPropertyType("");
+    setLocalPropertyPurpose("BUY");
+    setLocalPriceMin(0);
+    setLocalPriceMax(MAX_PRICE);
+    setLocalAreaMin(0);
+    setLocalAreaMax(10000);
+    setLocalAreaUnit("SQUARE_FEET");
+    setLocalBeds("All");
+    setLocalBaths("All");
+    setLocalSearchTerm("");
+    setLocalSortBy("CreatedAt");
+    setLocalIsDescending(true);
+    setSelectedAreaUnit(areaUnits[0]);
+    setTimeout(() => {
+      setFilters(buildApiFilters);
+      refetch();
+    }, 0);
+  }, [router, buildApiFilters, setFilters, refetch]);
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+    <Box sx={{ minHeight: "100vh", bgcolor: "#f5f7fb" }}>
       {/* Hero Section */}
       <Box
         sx={{
           position: "relative",
-          pt: 28,
-          pb: { xs: 5, md: 6 },
-          backgroundImage: "url('/real-estate-bg.jpg')",
-          backgroundSize: "cover",
-          backgroundPosition: "center",
+          pt: { xs: 8, md: 12 },
+          pb: { xs: 6, md: 8 },
+          backgroundImage: "linear-gradient(135deg, #1a2a3a 0%, #0f1a24 100%)",
           "&::before": {
             content: '""',
             position: "absolute",
@@ -358,7 +457,10 @@ export default function PropertiesPage() {
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: "rgba(0,0,0,0.55)",
+            backgroundImage: "url('/real-estate-bg.jpg')",
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            opacity: 0.15,
           },
         }}
       >
@@ -367,7 +469,7 @@ export default function PropertiesPage() {
             variant="h3"
             sx={{
               fontWeight: 700,
-              fontSize: { xs: "2rem", md: "2.8rem" },
+              fontSize: { xs: "1.8rem", md: "2.8rem" },
               textAlign: "center",
               color: "white",
               mb: 1,
@@ -376,16 +478,25 @@ export default function PropertiesPage() {
             Search properties for sale in Pakistan
           </Typography>
 
-          <Paper elevation={3} sx={{ p: 2, borderRadius: 3, mt: 4 }}>
-            {/* Buy/Rent Toggle */}
-            <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
+          <Paper
+            elevation={0}
+            sx={{
+              p: { xs: 2, md: 3 },
+              borderRadius: 4,
+              mt: 4,
+              background: "rgba(255,255,255,0.95)",
+              backdropFilter: "blur(2px)",
+              border: "1px solid rgba(255,255,255,0.2)",
+            }}
+          >
+            <Box sx={{ display: "flex", justifyContent: "center", mb: 3 }}>
               <Stack direction="row" spacing={2}>
                 <Button
                   variant={
                     localPropertyPurpose === "BUY" ? "contained" : "outlined"
                   }
                   onClick={() => setLocalPropertyPurpose("BUY")}
-                  sx={{ textTransform: "none", px: 4 }}
+                  sx={{ textTransform: "none", px: 4, fontWeight: 600 }}
                 >
                   Buy
                 </Button>
@@ -394,74 +505,68 @@ export default function PropertiesPage() {
                     localPropertyPurpose === "RENT" ? "contained" : "outlined"
                   }
                   onClick={() => setLocalPropertyPurpose("RENT")}
-                  sx={{ textTransform: "none", px: 4 }}
+                  sx={{ textTransform: "none", px: 4, fontWeight: 600 }}
                 >
                   Rent
                 </Button>
               </Stack>
             </Box>
 
-            <Grid container spacing={2}>
-              {/* City Autocomplete */}
+            <Grid container spacing={2} sx={{ alignItems: "center" }}>
               <Grid size={{ xs: 12, sm: 6, md: 2.5 }}>
                 <Autocomplete
                   freeSolo
                   options={CITIES}
                   value={localCity}
                   onInputChange={(_, v) => setLocalCity(v || "Gujranwala")}
-                  renderInput={(p) => (
-                    <TextField {...p} label="City" size="small" />
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="City"
+                      size="medium"
+                      variant="outlined"
+                    />
                   )}
                 />
               </Grid>
-
-              {/* Location Autocomplete – SINGLE selection with highlighting */}
               <Grid size={{ xs: 12, sm: 6, md: 3.5 }}>
                 <Autocomplete
                   freeSolo
                   options={locationOptions}
                   value={localLocation || ""}
-                  onInputChange={(_, newInputValue) =>
-                    setLocationInput(newInputValue)
-                  }
-                  onChange={(_, newValue) => setLocalLocation(newValue)}
-                  renderOption={(props, option) => (
-                    <li {...props} key={option}>
-                      {highlightText(option, locationInput)}
+                  onInputChange={(_, v) => setLocationInput(v)}
+                  onChange={(_, v) => setLocalLocation(v)}
+                  renderOption={(props, opt) => (
+                    <li {...props} key={opt}>
+                      {highlightText(opt, locationInput)}
                     </li>
                   )}
                   renderInput={(params) => (
                     <TextField
                       {...params}
                       label="Location"
-                      size="small"
-                      placeholder="Location"
+                      size="medium"
+                      placeholder="Area / Society"
                     />
                   )}
                 />
               </Grid>
-
-              {/* Property Type */}
               <Grid size={{ xs: 12, sm: 6, md: 2 }}>
-                <FormControl fullWidth size="small">
+                <FormControl fullWidth size="medium">
                   <InputLabel>Property Type</InputLabel>
                   <Select
                     value={localPropertyType}
                     label="Property Type"
                     onChange={(e) => setLocalPropertyType(e.target.value)}
                   >
-                    <MenuItem value="HOUSE">House</MenuItem>
-                    <MenuItem value="FLAT">Flat</MenuItem>
-                    <MenuItem value="PLOT">Plot</MenuItem>
-                    <MenuItem value="COMMERCIAL">Commercial</MenuItem>
-                    <MenuItem value="SHOP">Shop</MenuItem>
-                    <MenuItem value="FACTORY">Factory</MenuItem>
-                    <MenuItem value="STUDIO">Studio</MenuItem>
+                    {propertyTypeOptions.map((type) => (
+                      <MenuItem key={type} value={type}>
+                        {type.charAt(0) + type.slice(1).toLowerCase()}
+                      </MenuItem>
+                    ))}
                   </Select>
                 </FormControl>
               </Grid>
-
-              {/* Find Button */}
               <Grid size={{ xs: 12, sm: 6, md: 2 }}>
                 <Button
                   fullWidth
@@ -472,22 +577,25 @@ export default function PropertiesPage() {
                     "&:hover": { bgcolor: "#d97706" },
                     textTransform: "none",
                     fontWeight: 600,
-                    py: 0.75,
+                    py: 1.2,
+                    borderRadius: 2,
                   }}
                   startIcon={<SearchIcon />}
                 >
                   Find
                 </Button>
               </Grid>
-
-              {/* More/Less Options */}
               <Grid size={{ xs: 12, md: 2 }} sx={{ textAlign: "right" }}>
                 <Button
                   size="small"
                   variant="text"
-                  startIcon={<TuneIcon fontSize="small" />}
+                  startIcon={<TuneIcon />}
                   onClick={() => setShowMoreOptions(!showMoreOptions)}
-                  sx={{ textTransform: "none", color: "#f59e0b" }}
+                  sx={{
+                    textTransform: "none",
+                    color: "#f59e0b",
+                    fontWeight: 500,
+                  }}
                 >
                   {showMoreOptions ? "Less Options" : "More Options"}
                 </Button>
@@ -497,16 +605,15 @@ export default function PropertiesPage() {
             <Collapse in={showMoreOptions}>
               <Box
                 sx={{
-                  mt: 2,
+                  mt: 3,
                   pt: 2,
                   borderTop: "1px solid",
                   borderColor: "divider",
                 }}
               >
                 <Grid container spacing={3}>
-                  {/* Price Range */}
                   <Grid size={{ xs: 12, md: 6 }}>
-                    <Typography variant="subtitle2" gutterBottom>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 500 }}>
                       Price Range ({currencyUI})
                     </Typography>
                     <Slider
@@ -532,6 +639,15 @@ export default function PropertiesPage() {
                           setLocalPriceMin(Number(e.target.value))
                         }
                         fullWidth
+                        slotProps={{
+                          input: {
+                            startAdornment: (
+                              <InputAdornment position="start">
+                                PKR
+                              </InputAdornment>
+                            ),
+                          },
+                        }}
                       />
                       <TextField
                         label="Max"
@@ -542,6 +658,15 @@ export default function PropertiesPage() {
                           setLocalPriceMax(Number(e.target.value))
                         }
                         fullWidth
+                        slotProps={{
+                          input: {
+                            startAdornment: (
+                              <InputAdornment position="start">
+                                PKR
+                              </InputAdornment>
+                            ),
+                          },
+                        }}
                       />
                       <Button
                         size="small"
@@ -552,10 +677,8 @@ export default function PropertiesPage() {
                       </Button>
                     </Box>
                   </Grid>
-
-                  {/* Area Range */}
                   <Grid size={{ xs: 12, md: 6 }}>
-                    <Typography variant="subtitle2" gutterBottom>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 500 }}>
                       Area ({selectedAreaUnit.label})
                     </Typography>
                     <Box sx={{ display: "flex", gap: 2, mb: 1 }}>
@@ -571,9 +694,9 @@ export default function PropertiesPage() {
                           if (n < 0) n = 0;
                           setLocalAreaMin(n);
                         }}
-                        renderInput={(p) => (
+                        renderInput={(params) => (
                           <TextField
-                            {...p}
+                            {...params}
                             label="Min"
                             size="small"
                             type="number"
@@ -595,9 +718,9 @@ export default function PropertiesPage() {
                           if (n < 0) n = 0;
                           setLocalAreaMax(n);
                         }}
-                        renderInput={(p) => (
+                        renderInput={(params) => (
                           <TextField
-                            {...p}
+                            {...params}
                             label="Max"
                             size="small"
                             type="number"
@@ -607,8 +730,6 @@ export default function PropertiesPage() {
                       />
                     </Box>
                   </Grid>
-
-                  {/* Beds & Baths */}
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <FormControl fullWidth size="small">
                       <InputLabel>Beds</InputLabel>
@@ -641,8 +762,6 @@ export default function PropertiesPage() {
                       </Select>
                     </FormControl>
                   </Grid>
-
-                  {/* Keyword */}
                   <Grid size={{ xs: 12 }}>
                     <TextField
                       fullWidth
@@ -650,10 +769,17 @@ export default function PropertiesPage() {
                       size="small"
                       value={localSearchTerm}
                       onChange={(e) => setLocalSearchTerm(e.target.value)}
+                      slotProps={{
+                        input: {
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <SearchIcon fontSize="small" />
+                            </InputAdornment>
+                          ),
+                        },
+                      }}
                     />
                   </Grid>
-
-                  {/* Sort By & Order */}
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <FormControl fullWidth size="small">
                       <InputLabel>Sort By</InputLabel>
@@ -684,12 +810,6 @@ export default function PropertiesPage() {
                       </Select>
                     </FormControl>
                   </Grid>
-
-                  <Grid size={{ xs: 12 }} sx={{ textAlign: "right" }}>
-                    <Button size="small" variant="text" onClick={handleReset}>
-                      Reset All Filters
-                    </Button>
-                  </Grid>
                 </Grid>
               </Box>
             </Collapse>
@@ -716,16 +836,20 @@ export default function PropertiesPage() {
               >
                 Change Area Unit
               </Button>
-              <Button size="small" variant="text" onClick={handleReset}>
-                Reset Search
+              <Button
+                size="small"
+                variant="text"
+                onClick={handleReset}
+                startIcon={<ClearIcon fontSize="small" />}
+              >
+                Reset
               </Button>
             </Box>
           </Paper>
         </Container>
       </Box>
 
-      {/* Results Summary & Type Chips */}
-      <Container maxWidth="lg" sx={{ mt: 3, mb: 1 }}>
+      <Container maxWidth="lg" sx={{ mt: 4, mb: 6 }}>
         {data && !loading && (
           <Box
             sx={{
@@ -733,64 +857,55 @@ export default function PropertiesPage() {
               justifyContent: "space-between",
               alignItems: "center",
               flexWrap: "wrap",
-              gap: 1,
+              gap: 2,
+              mb: 3,
             }}
           >
-            <Typography variant="subtitle2" sx={{ fontWeight: 500 }}>
+            <Typography
+              variant="subtitle1"
+              sx={{ fontWeight: 500, color: "text.secondary" }}
+            >
               {displayItems.length} properties found
             </Typography>
-            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
-              <Chip
-                label="All"
+            <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
+              <FormControl size="small" sx={{ minWidth: 120 }}>
+                <InputLabel>Sort by</InputLabel>
+                <Select
+                  value={localSortBy}
+                  label="Sort by"
+                  onChange={(e) => setLocalSortBy(e.target.value)}
+                >
+                  <MenuItem value="CreatedAt">Newest</MenuItem>
+                  <MenuItem value="Price">Price</MenuItem>
+                  <MenuItem value="AreaSize">Area</MenuItem>
+                  <MenuItem value="Bedrooms">Bedrooms</MenuItem>
+                </Select>
+              </FormControl>
+              <Button
                 size="small"
-                variant={clientTypeFilter === null ? "filled" : "outlined"}
-                color={clientTypeFilter === null ? "primary" : "default"}
-                onClick={() => setClientTypeFilter(null)}
-                clickable
-              />
-              <Chip
-                label="House"
+                variant="text"
+                onClick={() => setLocalIsDescending(!localIsDescending)}
+                startIcon={localIsDescending ? <span>↓</span> : <span>↑</span>}
+              >
+                {localIsDescending ? "Descending" : "Ascending"}
+              </Button>
+              <ToggleButtonGroup
+                value={viewMode}
+                exclusive
+                onChange={(_, m) => m && setViewMode(m)}
                 size="small"
-                variant={clientTypeFilter === "HOUSE" ? "filled" : "outlined"}
-                color={clientTypeFilter === "HOUSE" ? "primary" : "default"}
-                onClick={() => setClientTypeFilter("HOUSE")}
-                clickable
-              />
-              <Chip
-                label="Flat"
-                size="small"
-                variant={clientTypeFilter === "FLAT" ? "filled" : "outlined"}
-                color={clientTypeFilter === "FLAT" ? "primary" : "default"}
-                onClick={() => setClientTypeFilter("FLAT")}
-                clickable
-              />
-              <Chip
-                label="Commercial"
-                size="small"
-                variant={
-                  clientTypeFilter === "COMMERCIAL" ? "filled" : "outlined"
-                }
-                color={
-                  clientTypeFilter === "COMMERCIAL" ? "primary" : "default"
-                }
-                onClick={() => setClientTypeFilter("COMMERCIAL")}
-                clickable
-              />
-              <Chip
-                label="Shop"
-                size="small"
-                variant={clientTypeFilter === "SHOP" ? "filled" : "outlined"}
-                color={clientTypeFilter === "SHOP" ? "primary" : "default"}
-                onClick={() => setClientTypeFilter("SHOP")}
-                clickable
-              />
+              >
+                <ToggleButton value="grid">
+                  <GridViewIcon />
+                </ToggleButton>
+                <ToggleButton value="list">
+                  <ViewListIcon />
+                </ToggleButton>
+              </ToggleButtonGroup>
             </Stack>
           </Box>
         )}
-      </Container>
 
-      {/* Property Grid */}
-      <Container maxWidth="lg" sx={{ mb: 5 }}>
         {loading ? (
           <Grid container spacing={3}>
             {Array.from(new Array(6)).map((_, i) => (
@@ -802,31 +917,39 @@ export default function PropertiesPage() {
         ) : error ? (
           <Alert severity="error">{error}</Alert>
         ) : displayItems.length === 0 ? (
-          <Typography
-            sx={{ textAlign: "center", py: 6, color: "text.secondary" }}
-          >
-            No properties found. Try adjusting your filters.
-          </Typography>
+          <Paper sx={{ p: 8, textAlign: "center", borderRadius: 3 }}>
+            <Typography variant="h6" color="text.secondary">
+              No properties found.
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Try adjusting your filters or reset search.
+            </Typography>
+          </Paper>
         ) : (
           <>
-            <Grid container spacing={3}>
+            <Grid container spacing={viewMode === "grid" ? 3 : 2}>
               {displayItems.map((property) => (
-                <Grid size={{ xs: 12, sm: 6, md: 4 }} key={property.id}>
+                <Grid
+                  key={property.id}
+                  size={{
+                    xs: 12,
+                    sm: viewMode === "grid" ? 6 : 12,
+                    md: viewMode === "grid" ? 4 : 12,
+                  }}
+                >
                   <PropertyCard property={property} formatPrice={formatPrice} />
                 </Grid>
               ))}
             </Grid>
             {data && data.totalCount > 0 && (
-              <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
+              <Box sx={{ display: "flex", justifyContent: "center", mt: 5 }}>
                 <Pagination
                   count={Math.ceil(data.totalCount / (data.pageSize || 9))}
-                  page={data.page || 1}
-                  onChange={(_, page) => {
-                    setFilters((prev) => ({ ...prev, Page: page }));
-                    refetch();
-                  }}
+                  page={currentPage}
+                  onChange={(_, page) => handlePageChange(page)}
                   color="primary"
-                  size="medium"
+                  size="large"
+                  sx={{ "& .MuiPaginationItem-root": { borderRadius: 2 } }}
                 />
               </Box>
             )}

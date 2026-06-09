@@ -28,13 +28,7 @@ import EmailIcon from "@mui/icons-material/Email";
 import CloseIcon from "@mui/icons-material/Close";
 import { PropertyResponse } from "@/lib/types";
 import Link from "next/link";
-
-const formatPrice = (price: number) =>
-  new Intl.NumberFormat("en-PK", {
-    style: "currency",
-    currency: "PKR",
-    maximumFractionDigits: 0,
-  }).format(price);
+import { useSettings } from "@/context/SettingsContext";
 
 export default function PropertyCard({
   property,
@@ -45,6 +39,7 @@ export default function PropertyCard({
     ? property.propertyPics
     : ["/placeholder-property.jpg"];
   const [currentIndex, setCurrentIndex] = useState(0);
+  const { formatPrice, formatArea } = useSettings();
 
   // Email dialog state
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
@@ -263,8 +258,7 @@ export default function PropertyCard({
                 <strong>{property.bathrooms}</strong> Baths
               </Typography>
               <Typography variant="body2">
-                <strong>{property.areaSize}</strong>{" "}
-                {property.areaUnit || "sq.ft."}
+                <strong>{formatArea(property.areaSize)}</strong>
               </Typography>
             </Stack>
 

@@ -150,4 +150,8 @@ export interface EnquiryResponse {
   phone?: string;
   message: string;
   createdAt: string;
+  cnic?: string;
+  city?: string;
+  enquiryType?: string;
+  monthlySalary?: string;
 }

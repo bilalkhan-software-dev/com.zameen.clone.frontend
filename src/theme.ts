@@ -3,26 +3,26 @@ import { createTheme } from "@mui/material/styles";
 const theme = createTheme({
   palette: {
     primary: {
-      main: "#1e293b", // slate‑800 – deep, confident, professional
-      light: "#334155", // slate‑700
-      dark: "#0f172a", // slate‑900
+      main: "#28B16E",       // Zameen green
+      light: "#4ECB8C",
+      dark: "#1E8A54",
       contrastText: "#ffffff",
     },
     secondary: {
-      main: "#f59e0b", // warm amber – keeps the inviting call‑to‑action
-      light: "#fbbf24",
-      dark: "#b45309",
+      main: "#28B16E",       // same green for consistency
+      light: "#4ECB8C",
+      dark: "#1E8A54",
     },
     error: {
       main: "#ef4444",
     },
     background: {
       default: "#ffffff",
-      paper: "#f8fafc", // very subtle grey for cards and surfaces
+      paper: "#f8fafc",
     },
     text: {
-      primary: "#0f172a", // slate‑900 – high contrast on white
-      secondary: "#475569", // slate‑600 – softer secondary text
+      primary: "#111827",
+      secondary: "#4B5563",
     },
   },
   typography: {
@@ -57,18 +57,18 @@ const theme = createTheme({
           },
         },
         contained: {
-          background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
+          background: "linear-gradient(135deg, #28B16E 0%, #1E8A54 100%)",
           color: "#ffffff",
           "&:hover": {
-            background: "linear-gradient(135deg, #0f172a 0%, #020617 100%)",
+            background: "linear-gradient(135deg, #1E8A54 0%, #16623A 100%)",
           },
         },
         outlined: {
-          borderColor: "#1e293b",
-          color: "#1e293b",
+          borderColor: "#28B16E",
+          color: "#28B16E",
           "&:hover": {
-            borderColor: "#0f172a",
-            backgroundColor: "rgba(30,41,59,0.04)",
+            borderColor: "#1E8A54",
+            backgroundColor: "rgba(40,177,110,0.04)",
           },
         },
       },
@@ -110,7 +110,7 @@ const theme = createTheme({
     MuiTableHead: {
       styleOverrides: {
         root: {
-          backgroundColor: "#f1f5f9", // light slate for table headers
+          backgroundColor: "#f1f5f9",
         },
       },
     },

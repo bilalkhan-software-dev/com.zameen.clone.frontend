@@ -32,23 +32,23 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import api from "@/lib/axios";
 import { PropertyResponse, PagedResult } from "@/lib/types";
+import { useSettings } from "@/context/SettingsContext";
 
 export default function AgentPropertiesPage() {
   const router = useRouter();
+  const { formatPrice, formatArea } = useSettings();
   const [properties, setProperties] =
     useState<PagedResult<PropertyResponse> | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
-  // Feedback snackbar
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
     severity: "success" | "error";
   }>({ open: false, message: "", severity: "success" });
 
-  // Delete dialog
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedPropertyId, setSelectedPropertyId] = useState<number | null>(
     null,
@@ -69,9 +69,7 @@ export default function AgentPropertiesPage() {
         },
       });
       setProperties(res.data.data);
-     
     } catch (err: any) {
-      console.log(err);
       setSnackbar({
         open: true,
         message: err.response?.data?.message || "Failed to load properties",
@@ -85,8 +83,6 @@ export default function AgentPropertiesPage() {
   useEffect(() => {
     fetchProperties();
   }, [fetchProperties]);
-
-   console.log(properties);
 
   const handleDeleteClick = (propertyId: number) => {
     setSelectedPropertyId(propertyId);
@@ -133,8 +129,7 @@ export default function AgentPropertiesPage() {
   };
 
   return (
-    <Container maxWidth="lg">
-      {/* Header */}
+    <Container maxWidth="lg" sx={{ py: 4 }}>
       <Box
         sx={{
           display: "flex",
@@ -143,7 +138,9 @@ export default function AgentPropertiesPage() {
           mb: 3,
         }}
       >
-        <Typography variant="h4">My Properties</Typography>
+        <Typography variant="h4" sx={{ fontWeight: 700 }}>
+          My Properties
+        </Typography>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
@@ -153,9 +150,8 @@ export default function AgentPropertiesPage() {
         </Button>
       </Box>
 
-      {/* Loading / Empty / Error handled inline with snackbar for errors */}
       {loading ? (
-        <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+        <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
           <CircularProgress />
         </Box>
       ) : !properties || properties.items.length === 0 ? (
@@ -163,24 +159,55 @@ export default function AgentPropertiesPage() {
           No properties found. Click &quot;Add New Property&quot; to create one.
         </Alert>
       ) : (
-        <Paper>
+        <Paper sx={{ borderRadius: 3, overflow: "hidden" }}>
           <Table>
             <TableHead>
               <TableRow>
                 <TableCell>Title</TableCell>
                 <TableCell>City</TableCell>
+                <TableCell>Type</TableCell>
+                <TableCell>Area</TableCell>
                 <TableCell>Price</TableCell>
+                <TableCell>Purpose</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell>Active</TableCell>
+                {/* <TableCell align="center">Enquiries</TableCell> */}
                 <TableCell align="center">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {properties.items.map((property) => (
-                <TableRow key={property.id}>
-                  <TableCell>{property.title}</TableCell>
+                <TableRow key={property.id} hover>
+                  <TableCell>
+                    <Typography variant="body2" fontWeight={600}>
+                      {property.title}
+                    </Typography>
+                  </TableCell>
                   <TableCell>{property.city}</TableCell>
-                  <TableCell>PKR {property.price.toLocaleString()}</TableCell>
+                  <TableCell>
+                    <Chip
+                      label={property.propertyType?.toLowerCase()}
+                      size="small"
+                      variant="outlined"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    {property.areaSize ? formatArea(property.areaSize) : "-"}
+                  </TableCell>
+                  <TableCell>{formatPrice(property.price)}</TableCell>
+                  <TableCell>
+                    <Chip
+                      label={
+                        property.propertyPurpose === "BUY" ? "Sale" : "Rent"
+                      }
+                      size="small"
+                      color={
+                        property.propertyPurpose === "BUY"
+                          ? "primary"
+                          : "secondary"
+                      }
+                    />
+                  </TableCell>
                   <TableCell>
                     <Chip
                       label={property.status}
@@ -201,12 +228,16 @@ export default function AgentPropertiesPage() {
                       clickable
                     />
                   </TableCell>
+                  {/* <TableCell align="center">
+                    {(property as any).enquiryCount ?? 0}
+                  </TableCell> */}
                   <TableCell align="center">
                     <IconButton
                       component={Link}
                       href={`/property/${property.id}`}
                       target="_blank"
                       size="small"
+                      title="View public page"
                     >
                       <VisibilityIcon />
                     </IconButton>
@@ -217,6 +248,7 @@ export default function AgentPropertiesPage() {
                         )
                       }
                       size="small"
+                      title="Edit property"
                     >
                       <EditIcon />
                     </IconButton>
@@ -224,6 +256,7 @@ export default function AgentPropertiesPage() {
                       onClick={() => handleDeleteClick(property.id)}
                       size="small"
                       color="error"
+                      title="Delete property"
                     >
                       <DeleteIcon />
                     </IconButton>
@@ -237,6 +270,7 @@ export default function AgentPropertiesPage() {
               count={Math.ceil(properties.totalCount / pageSize)}
               page={page}
               onChange={(_, newPage) => setPage(newPage)}
+              color="primary"
             />
           </Box>
         </Paper>

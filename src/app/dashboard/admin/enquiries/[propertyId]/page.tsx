@@ -24,12 +24,14 @@ import {
   Button,
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
-import { useParams } from "next/navigation";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import { useParams, useRouter } from "next/navigation";
 import api from "@/lib/axios";
 import { EnquiryResponse, PagedResult } from "@/lib/types";
 
 export default function AdminPropertyEnquiriesPage() {
   const { propertyId } = useParams();
+  const router = useRouter();
   const [enquiries, setEnquiries] =
     useState<PagedResult<EnquiryResponse> | null>(null);
   const [loading, setLoading] = useState(true);
@@ -41,11 +43,7 @@ export default function AdminPropertyEnquiriesPage() {
     open: boolean;
     message: string;
     severity: "success" | "error";
-  }>({
-    open: false,
-    message: "",
-    severity: "success",
-  });
+  }>({ open: false, message: "", severity: "success" });
 
   const fetchEnquiries = async () => {
     setLoading(true);
@@ -85,11 +83,21 @@ export default function AdminPropertyEnquiriesPage() {
       });
     }
   };
+
   return (
-    <Container maxWidth="lg">
-      <Typography variant="h4" gutterBottom>
+    <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Button
+        startIcon={<ArrowBackIcon />}
+        onClick={() => router.push("/dashboard/admin/enquiries")}
+        sx={{ mb: 2 }}
+      >
+        Back to Properties
+      </Button>
+
+      <Typography variant="h4" gutterBottom sx={{ fontWeight: 700 }}>
         Enquiries for Property #{propertyId}
       </Typography>
+
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
@@ -97,13 +105,13 @@ export default function AdminPropertyEnquiriesPage() {
       )}
 
       {loading ? (
-        <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+        <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
           <CircularProgress />
         </Box>
       ) : !enquiries || enquiries.items.length === 0 ? (
         <Alert severity="info">No enquiries found for this property.</Alert>
       ) : (
-        <Paper>
+        <Paper sx={{ borderRadius: 3, overflow: "hidden" }}>
           <Table>
             <TableHead>
               <TableRow>
@@ -111,19 +119,24 @@ export default function AdminPropertyEnquiriesPage() {
                 <TableCell>Email</TableCell>
                 <TableCell>Phone</TableCell>
                 <TableCell>Message</TableCell>
+                <TableCell>Role</TableCell>
+                <TableCell>City</TableCell>
+                <TableCell>Salary</TableCell>
+                <TableCell>CNIC</TableCell>
+                <TableCell>Keep Informed</TableCell>
                 <TableCell>Date</TableCell>
                 <TableCell align="center">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {enquiries.items.map((enq) => (
-                <TableRow key={enq.id}>
+                <TableRow key={enq.id} hover>
                   <TableCell>{enq.senderName}</TableCell>
                   <TableCell>{enq.senderEmail}</TableCell>
                   <TableCell>{enq.phone || "-"}</TableCell>
                   <TableCell
                     sx={{
-                      maxWidth: 300,
+                      maxWidth: 250,
                       whiteSpace: "normal",
                       wordBreak: "break-word",
                     }}
@@ -131,7 +144,16 @@ export default function AdminPropertyEnquiriesPage() {
                     {enq.message}
                   </TableCell>
                   <TableCell>
-                    {new Date(enq.createdAt).toLocaleDateString()}
+                    {(enq as any).role || (enq as any).enquiryType || "-"}
+                  </TableCell>
+                  <TableCell>{(enq as any).city || "-"}</TableCell>
+                  <TableCell>{(enq as any).monthlySalary || "-"}</TableCell>
+                  <TableCell>{(enq as any).cnic || "-"}</TableCell>
+                  <TableCell>
+                    {(enq as any).keepInformed ? "Yes" : "No"}
+                  </TableCell>
+                  <TableCell>
+                    {new Date(enq.createdAt).toLocaleString()}
                   </TableCell>
                   <TableCell align="center">
                     <IconButton
@@ -150,6 +172,7 @@ export default function AdminPropertyEnquiriesPage() {
               count={Math.ceil(enquiries.totalCount / pageSize)}
               page={page}
               onChange={(_, newPage) => setPage(newPage)}
+              color="primary"
             />
           </Box>
         </Paper>
@@ -177,7 +200,11 @@ export default function AdminPropertyEnquiriesPage() {
         onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       >
-        <Alert severity={snackbar.severity} variant="filled">
+        <Alert
+          severity={snackbar.severity}
+          variant="filled"
+          sx={{ width: "100%" }}
+        >
           {snackbar.message}
         </Alert>
       </Snackbar>
