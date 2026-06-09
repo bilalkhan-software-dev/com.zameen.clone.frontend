@@ -159,10 +159,11 @@ export default function AgentPropertiesPage() {
           No properties found. Click &quot;Add New Property&quot; to create one.
         </Alert>
       ) : (
-        <Paper sx={{ borderRadius: 3, overflow: "hidden" }}>
-          <Table>
+        <Paper sx={{ borderRadius: 3, overflowX: "auto" }}>
+          <Table sx={{ minWidth: 900 }}>
             <TableHead>
               <TableRow>
+                <TableCell>ID</TableCell>
                 <TableCell>Title</TableCell>
                 <TableCell>City</TableCell>
                 <TableCell>Type</TableCell>
@@ -170,8 +171,6 @@ export default function AgentPropertiesPage() {
                 <TableCell>Price</TableCell>
                 <TableCell>Purpose</TableCell>
                 <TableCell>Status</TableCell>
-                <TableCell>Active</TableCell>
-                {/* <TableCell align="center">Enquiries</TableCell> */}
                 <TableCell align="center">Actions</TableCell>
               </TableRow>
             </TableHead>
@@ -179,7 +178,12 @@ export default function AgentPropertiesPage() {
               {properties.items.map((property) => (
                 <TableRow key={property.id} hover>
                   <TableCell>
-                    <Typography variant="body2" fontWeight={600}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {property.id}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
                       {property.title}
                     </Typography>
                   </TableCell>
@@ -217,29 +221,16 @@ export default function AgentPropertiesPage() {
                       }
                     />
                   </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={property.isActive ? "Active" : "Inactive"}
-                      size="small"
-                      color={property.isActive ? "primary" : "default"}
-                      onClick={() =>
-                        toggleActive(property.id, property.isActive)
-                      }
-                      clickable
-                    />
-                  </TableCell>
-                  {/* <TableCell align="center">
-                    {(property as any).enquiryCount ?? 0}
-                  </TableCell> */}
-                  <TableCell align="center">
+                  <TableCell align="center" sx={{ whiteSpace: "nowrap" }}>
                     <IconButton
                       component={Link}
-                      href={`/property/${property.id}`}
+                      href={`/properties/${property.id}`}
                       target="_blank"
                       size="small"
                       title="View public page"
+                      sx={{ p: 0.5, minWidth: "auto" }}
                     >
-                      <VisibilityIcon />
+                      <VisibilityIcon fontSize="small" />
                     </IconButton>
                     <IconButton
                       onClick={() =>
@@ -249,16 +240,18 @@ export default function AgentPropertiesPage() {
                       }
                       size="small"
                       title="Edit property"
+                      sx={{ p: 0.5, minWidth: "auto" }}
                     >
-                      <EditIcon />
+                      <EditIcon fontSize="small" />
                     </IconButton>
                     <IconButton
                       onClick={() => handleDeleteClick(property.id)}
                       size="small"
                       color="error"
                       title="Delete property"
+                      sx={{ p: 0.5, minWidth: "auto" }}
                     >
-                      <DeleteIcon />
+                      <DeleteIcon fontSize="small" />
                     </IconButton>
                   </TableCell>
                 </TableRow>

@@ -52,6 +52,8 @@ import BrowsePropertiesCarousel from "@/components/BrowsePropertiesCarousel";
 // Constants
 // ----------------------------------------------------------------------
 const CITIES = [
+  "Abbottabad",
+  "Bahawalpur",
   "Islamabad",
   "Karachi",
   "Lahore",
@@ -61,6 +63,8 @@ const CITIES = [
   "Peshawar",
   "Multan",
   "Sialkot",
+  "Sukkur",
+  "Sargodha",
   "Quetta",
 ];
 const bedOptions = ["All", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10+"];
@@ -720,7 +724,7 @@ export default function HomePage() {
                       />
                     </Box>
                   </Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}>
+                  <Grid size={{ xs: 12, sm: 4 }}>
                     <FormControl fullWidth size="small">
                       <InputLabel>Beds</InputLabel>
                       <Select
@@ -736,7 +740,7 @@ export default function HomePage() {
                       </Select>
                     </FormControl>
                   </Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}>
+                  <Grid size={{ xs: 12, sm: 4 }}>
                     <FormControl fullWidth size="small">
                       <InputLabel>Bathrooms</InputLabel>
                       <Select
@@ -752,7 +756,7 @@ export default function HomePage() {
                       </Select>
                     </FormControl>
                   </Grid>
-                  <Grid size={{ xs: 12 }}>
+                  <Grid size={{ xs: 4 }}>
                     <TextField
                       fullWidth
                       label="Keyword"
@@ -761,11 +765,11 @@ export default function HomePage() {
                       onChange={(e) => setLocalSearchTerm(e.target.value)}
                     />
                   </Grid>
-                  <Grid size={{ xs: 12 }} sx={{ textAlign: "right" }}>
+                  {/* <Grid size={{ xs: 12 }} sx={{ textAlign: "right" }}>
                     <Button size="small" variant="text" onClick={handleReset}>
                       Reset All Filters
                     </Button>
-                  </Grid>
+                  </Grid> */}
                 </Grid>
               </Box>
             </Collapse>

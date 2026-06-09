@@ -19,6 +19,32 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Fetch agent ID if the user is an agent
+  const attachAgentId = async (profile: UserProfile) => {
+    if (profile.roles.includes("Agent")) {
+      try {
+        const res = await api.get("/api/Agent/me");
+        const agentId = res.data.data.id;
+        return { ...profile, agentId };
+      } catch (err) {
+        console.error("Failed to fetch agent profile", err);
+      }
+    }
+    return profile;
+  };
+
+  const refreshProfile = async () => {
+    try {
+      const res = await api.get("/api/User/profile");
+      const profile = res.data.data as UserProfile;
+      const enrichedProfile = await attachAgentId(profile);
+      setUser(enrichedProfile);
+    } catch {
+      setUser(null);
+      localStorage.clear();
+    }
+  };
+
   // Try to load user profile from stored token
   useEffect(() => {
     const loadUser = async () => {
@@ -27,23 +53,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setLoading(false);
         return;
       }
-      try {
-        const res = await api.get("/api/User/profile");
-        setUser(res.data.data);
-      } catch {
-        localStorage.clear();
-        setUser(null);
-      } finally {
-        setLoading(false);
-      }
+      await refreshProfile();
+      setLoading(false);
     };
     loadUser();
   }, []);
 
   const login = async (credentials: LoginRequest) => {
-    console.log(credentials);
     const res = await api.post("/api/Auth/login", credentials);
-    console.log(res);
     const { accessToken, refreshToken } = res.data.data;
     localStorage.setItem("accessToken", accessToken);
     localStorage.setItem("refreshToken", refreshToken);
@@ -52,7 +69,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const register = async (data: RegisterRequest) => {
     const res = await api.post("/api/Auth/register", data);
-     console.log(res);
     const { accessToken, refreshToken } = res.data.data;
     localStorage.setItem("accessToken", accessToken);
     localStorage.setItem("refreshToken", refreshToken);
@@ -71,16 +87,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const loginWithGoogle = () => {
     window.location.href = `${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5118"}/api/Auth/google-login`;
-  };
-
-  const refreshProfile = async () => {
-    try {
-      const res = await api.get("/api/User/profile");
-      setUser(res.data.data);
-    } catch {
-      setUser(null);
-      localStorage.clear();
-    }
   };
 
   return (

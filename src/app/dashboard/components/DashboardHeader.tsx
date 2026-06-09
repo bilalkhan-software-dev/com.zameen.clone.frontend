@@ -54,6 +54,7 @@ export default function DashboardHeader({
     setAnchorEl(event.currentTarget);
   const handleProfileClose = () => setAnchorEl(null);
 
+  // Build breadcrumbs: first item "Dashboard" (non-clickable), then dynamic path segments
   const breadcrumbs = [
     { label: "Dashboard", href: "/dashboard" },
     ...pathname
@@ -98,15 +99,20 @@ export default function DashboardHeader({
       <Breadcrumbs sx={{ flexGrow: 1 }}>
         {breadcrumbs.map((crumb, index) => {
           const isLast = index === breadcrumbs.length - 1;
-          return isLast ? (
-            <Typography
-              key={crumb.href}
-              color="text.primary"
-              sx={{ fontWeight: 700 }}
-            >
-              {crumb.label}
-            </Typography>
-          ) : (
+          // First item ("Dashboard") and last item are plain text
+          if (index === 0 || isLast) {
+            return (
+              <Typography
+                key={crumb.href}
+                color="text.primary"
+                sx={{ fontWeight: isLast ? 700 : 600 }}
+              >
+                {crumb.label}
+              </Typography>
+            );
+          }
+          // Intermediate items are clickable links
+          return (
             <Link
               key={crumb.href}
               href={crumb.href}

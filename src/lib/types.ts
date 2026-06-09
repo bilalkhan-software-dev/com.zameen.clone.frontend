@@ -31,6 +31,7 @@ export interface UserProfile {
   userName: string;
   roles: string[];
   accountStatus: string;
+  agentId?: string;
 }
 
 export interface PagedResult<T> {
@@ -149,7 +150,6 @@ export interface EnquiryResponse {
   senderEmail: string;
   phone?: string;
   message: string;
-  createdAt: string;
   cnic?: string;
   city?: string;
   enquiryType?: string;

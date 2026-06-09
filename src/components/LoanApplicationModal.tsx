@@ -18,6 +18,7 @@ import {
   IconButton,
   Alert,
   CircularProgress,
+  Autocomplete,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import api from "@/lib/axios";
@@ -27,7 +28,7 @@ interface LoanApplicationModalProps {
   onClose: () => void;
   propertyId: number;
   propertyPrice: number;
-   onSuccess: () => void;
+  onSuccess: () => void;
 }
 
 const CITIES = [
@@ -128,11 +129,7 @@ export default function LoanApplicationModal({
           )}
           <Stack spacing={2}>
             <Box sx={{ display: "flex", justifyContent: "center", mb: 1 }}>
-              <img
-                src="/vercel.svg"
-                alt="HBFC"
-                style={{ height: 40 }}
-              />
+              <img src="/vercel.svg" alt="HBFC" style={{ height: 40 }} />
             </Box>
 
             <TextField
@@ -174,20 +171,26 @@ export default function LoanApplicationModal({
               onChange={(e) => handleChange("cnic", e.target.value)}
               placeholder="12345-6789012-3"
             />
-            <FormControl fullWidth>
-              <InputLabel>Select City</InputLabel>
-              <Select
-                value={form.city}
-                label="Select City"
-                onChange={(e) => handleChange("city", e.target.value)}
-              >
-                {CITIES.map((city) => (
-                  <MenuItem key={city} value={city}>
-                    {city}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+
+            {/* City: free-solo Autocomplete – user can type or select */}
+            <Autocomplete
+              freeSolo
+              options={CITIES}
+              value={form.city}
+              onChange={(_, newValue) => handleChange("city", newValue || "")}
+              onInputChange={(_, newInputValue) =>
+                handleChange("city", newInputValue)
+              }
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="City"
+                  placeholder="Type or select a city"
+                  fullWidth
+                />
+              )}
+            />
+
             <FormControl fullWidth>
               <InputLabel>Monthly Salary</InputLabel>
               <Select

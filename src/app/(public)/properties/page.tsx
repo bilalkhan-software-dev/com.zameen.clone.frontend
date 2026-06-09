@@ -46,6 +46,8 @@ import api from "@/lib/axios";
 // Constants
 // ----------------------------------------------------------------------
 const CITIES = [
+  "Abbottabad",
+  "Bahawalpur",
   "Islamabad",
   "Karachi",
   "Lahore",
@@ -55,6 +57,8 @@ const CITIES = [
   "Peshawar",
   "Multan",
   "Sialkot",
+  "Sukkur",
+  "Sargodha",
   "Quetta",
 ];
 const bedOptions = ["All", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10+"];
@@ -173,7 +177,7 @@ export default function PropertiesPage() {
   // Local filter state
   const [localCity, setLocalCity] = useState<string>("Gujranwala");
   const [localLocation, setLocalLocation] = useState<string | null>(null);
-  const [localPropertyType, setLocalPropertyType] = useState<string>("");
+  const [localPropertyType, setLocalPropertyType] = useState<string>("HOUSE");
   const [localPropertyPurpose, setLocalPropertyPurpose] = useState<
     "BUY" | "RENT"
   >("BUY");
@@ -196,57 +200,67 @@ export default function PropertiesPage() {
   const initialLoadDone = useRef(false);
 
   // Read URL params once on mount
+  useEffect(() => {
+    const initial = getInitialFiltersFromUrl(searchParams);
 
-useEffect(() => {
-  const initial = getInitialFiltersFromUrl(searchParams);
+    setLocalCity(initial.city);
+    setLocalLocation(initial.location);
+    setLocalPropertyType(initial.propertyType);
+    setLocalPropertyPurpose(initial.propertyPurpose);
+    setLocalPriceMin(initial.priceMin);
+    setLocalPriceMax(initial.priceMax);
+    setLocalAreaMin(initial.areaMin);
+    setLocalAreaMax(initial.areaMax);
+    setLocalAreaUnit(initial.areaUnit);
+    setLocalBeds(initial.beds);
+    setLocalBaths(initial.baths);
+    setLocalSearchTerm(initial.keyword);
+    setLocalSortBy(initial.sortBy);
+    setLocalIsDescending(initial.isDescending);
+    setCurrentPage(initial.page);
 
-  // Update all local state (so the UI reflects the URL)
-  setLocalCity(initial.city);
-  setLocalLocation(initial.location);
-  setLocalPropertyType(initial.propertyType);
-  setLocalPropertyPurpose(initial.propertyPurpose);
-  setLocalPriceMin(initial.priceMin);
-  setLocalPriceMax(initial.priceMax);
-  setLocalAreaMin(initial.areaMin);
-  setLocalAreaMax(initial.areaMax);
-  setLocalAreaUnit(initial.areaUnit);
-  setLocalBeds(initial.beds);
-  setLocalBaths(initial.baths);
-  setLocalSearchTerm(initial.keyword);
-  setLocalSortBy(initial.sortBy);
-  setLocalIsDescending(initial.isDescending);
-  setCurrentPage(initial.page);
+    const unit =
+      areaUnits.find((u) => u.value === initial.areaUnit) || areaUnits[0];
+    setSelectedAreaUnit(unit);
 
-  const unit = areaUnits.find((u) => u.value === initial.areaUnit) || areaUnits[0];
-  setSelectedAreaUnit(unit);
+    const apiFilters = {
+      Page: initial.page,
+      PageSize: 9,
+      City: initial.city === "Gujranwala" ? undefined : initial.city,
+      Location: initial.location || undefined,
+      PropertyType: initial.propertyType || undefined,
+      PropertyPurpose: initial.propertyPurpose,
+      MinPrice: initial.priceMin === 0 ? undefined : initial.priceMin,
+      MaxPrice: initial.priceMax === MAX_PRICE ? undefined : initial.priceMax,
+      MinAreaSize:
+        initial.areaMin === 0 ? undefined : initial.areaMin * unit.factor,
+      MaxAreaSize:
+        initial.areaMax === 10000 ? undefined : initial.areaMax * unit.factor,
+      SearchTerm: initial.keyword || undefined,
+      MinBedrooms:
+        initial.beds === "All"
+          ? undefined
+          : initial.beds === "10+"
+            ? 10
+            : parseInt(initial.beds, 10),
+      MaxBedrooms:
+        initial.beds === "All"
+          ? undefined
+          : initial.beds === "10+"
+            ? undefined
+            : parseInt(initial.beds, 10),
+      MinBathrooms:
+        initial.baths === "All" ? undefined : parseInt(initial.baths, 10),
+      MaxBathrooms:
+        initial.baths === "All" ? undefined : parseInt(initial.baths, 10),
+      SortBy: "CreatedAt", // always newest first from API
+      IsDescending: true,
+    };
 
-  // Build the API filters using the initial values (not state)
-  const apiFilters = {
-    Page: initial.page,
-    PageSize: 9,
-    City: initial.city === "Gujranwala" ? undefined : initial.city,
-    Location: initial.location || undefined,
-    PropertyType: initial.propertyType || undefined,
-    PropertyPurpose: initial.propertyPurpose,
-    MinPrice: initial.priceMin === 0 ? undefined : initial.priceMin,
-    MaxPrice: initial.priceMax === MAX_PRICE ? undefined : initial.priceMax,
-    MinAreaSize: initial.areaMin === 0 ? undefined : initial.areaMin * unit.factor,
-    MaxAreaSize: initial.areaMax === 10000 ? undefined : initial.areaMax * unit.factor,
-    SearchTerm: initial.keyword || undefined,
-    MinBedrooms: initial.beds === "All" ? undefined : initial.beds === "10+" ? 10 : parseInt(initial.beds, 10),
-    MaxBedrooms: initial.beds === "All" ? undefined : initial.beds === "10+" ? undefined : parseInt(initial.beds, 10),
-    MinBathrooms: initial.baths === "All" ? undefined : parseInt(initial.baths, 10),
-    MaxBathrooms: initial.baths === "All" ? undefined : parseInt(initial.baths, 10),
-    SortBy: initial.sortBy,
-    IsDescending: initial.isDescending,
-  };
-
-  // Trigger the initial fetch with the correct filters
-  setFilters(apiFilters);
-  refetch();
-
-  initialLoadDone.current = true;
-}, []); // runs only once on mount
+    setFilters(apiFilters);
+    refetch();
+    initialLoadDone.current = true;
+  }, []);
 
   // Fetch location suggestions – stable effect
   useEffect(() => {
@@ -271,10 +285,9 @@ useEffect(() => {
       }
     };
     fetchLocations();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localCity, debouncedLocation]);
 
-  // Build API filters (memoized)
+  // Build API filters (memoized) – always use default sort
   const buildApiFilters = useMemo(() => {
     const unit =
       areaUnits.find((u) => u.value === localAreaUnit) || areaUnits[0];
@@ -306,8 +319,8 @@ useEffect(() => {
             : parseInt(localBeds, 10),
       MinBathrooms: localBaths === "All" ? undefined : parseInt(localBaths, 10),
       MaxBathrooms: localBaths === "All" ? undefined : parseInt(localBaths, 10),
-      SortBy: localSortBy,
-      IsDescending: localIsDescending,
+      SortBy: "CreatedAt",
+      IsDescending: true,
     };
   }, [
     localCity,
@@ -322,8 +335,6 @@ useEffect(() => {
     localBeds,
     localBaths,
     localSearchTerm,
-    localSortBy,
-    localIsDescending,
     currentPage,
   ]);
 
@@ -334,7 +345,38 @@ useEffect(() => {
     IsDescending: true,
   });
 
+  // Client‑side sorting of the fetched items
+  const sortedItems = useMemo(() => {
+    const items = data?.items || [];
+    if (!items.length) return [];
 
+    const sorted = [...items].sort((a: any, b: any) => {
+      let valA, valB;
+      switch (localSortBy) {
+        case "Price":
+          valA = a.price;
+          valB = b.price;
+          break;
+        case "AreaSize":
+          valA = a.areaSize || 0;
+          valB = b.areaSize || 0;
+          break;
+        case "Bedrooms":
+          valA = a.bedrooms || 0;
+          valB = b.bedrooms || 0;
+          break;
+        default: // "CreatedAt"
+          valA = new Date(a.createdAt).getTime();
+          valB = new Date(b.createdAt).getTime();
+      }
+      if (localIsDescending) {
+        return valB - valA;
+      } else {
+        return valA - valB;
+      }
+    });
+    return sorted;
+  }, [data?.items, localSortBy, localIsDescending]);
 
   const formatPrice = (price: number) => {
     const converted = currencyUI === "USD" ? price * 0.0036 : price;
@@ -345,8 +387,6 @@ useEffect(() => {
       return `${symbol} ${(converted / 100_000).toFixed(1)}L`;
     return `${symbol} ${converted.toLocaleString()}`;
   };
-
-  const displayItems = data?.items || [];
 
   const logSearch = useCallback(async () => {
     const locationToLog = localLocation || localCity;
@@ -384,8 +424,7 @@ useEffect(() => {
     if (localBeds !== "All") params.set("beds", localBeds);
     if (localBaths !== "All") params.set("baths", localBaths);
     if (localSearchTerm) params.set("q", localSearchTerm);
-    if (localSortBy !== "CreatedAt") params.set("sortBy", localSortBy);
-    if (!localIsDescending) params.set("order", "asc");
+    // We no longer put sort parameters in the URL because they are only client‑side
     params.set("page", "1");
     router.push(`/properties?${params.toString()}`);
   }, [
@@ -401,8 +440,6 @@ useEffect(() => {
     localBeds,
     localBaths,
     localSearchTerm,
-    localSortBy,
-    localIsDescending,
     logSearch,
     buildApiFilters,
     setFilters,
@@ -422,7 +459,7 @@ useEffect(() => {
     setCurrentPage(1);
     setLocalCity("Gujranwala");
     setLocalLocation(null);
-    setLocalPropertyType("");
+    setLocalPropertyType("HOUSE");
     setLocalPropertyPurpose("BUY");
     setLocalPriceMin(0);
     setLocalPriceMax(MAX_PRICE);
@@ -730,7 +767,7 @@ useEffect(() => {
                       />
                     </Box>
                   </Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}>
+                  <Grid size={{ xs: 12, sm: 3 }}>
                     <FormControl fullWidth size="small">
                       <InputLabel>Beds</InputLabel>
                       <Select
@@ -746,7 +783,7 @@ useEffect(() => {
                       </Select>
                     </FormControl>
                   </Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}>
+                  <Grid size={{ xs: 12, sm: 3 }}>
                     <FormControl fullWidth size="small">
                       <InputLabel>Bathrooms</InputLabel>
                       <Select
@@ -762,7 +799,7 @@ useEffect(() => {
                       </Select>
                     </FormControl>
                   </Grid>
-                  <Grid size={{ xs: 12 }}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
                       fullWidth
                       label="Keyword"
@@ -779,36 +816,6 @@ useEffect(() => {
                         },
                       }}
                     />
-                  </Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}>
-                    <FormControl fullWidth size="small">
-                      <InputLabel>Sort By</InputLabel>
-                      <Select
-                        value={localSortBy}
-                        label="Sort By"
-                        onChange={(e) => setLocalSortBy(e.target.value)}
-                      >
-                        <MenuItem value="CreatedAt">Newest</MenuItem>
-                        <MenuItem value="Price">Price</MenuItem>
-                        <MenuItem value="AreaSize">Area</MenuItem>
-                        <MenuItem value="Bedrooms">Bedrooms</MenuItem>
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}>
-                    <FormControl fullWidth size="small">
-                      <InputLabel>Order</InputLabel>
-                      <Select
-                        value={localIsDescending ? "desc" : "asc"}
-                        label="Order"
-                        onChange={(e) =>
-                          setLocalIsDescending(e.target.value === "desc")
-                        }
-                      >
-                        <MenuItem value="desc">Descending</MenuItem>
-                        <MenuItem value="asc">Ascending</MenuItem>
-                      </Select>
-                    </FormControl>
                   </Grid>
                 </Grid>
               </Box>
@@ -865,7 +872,7 @@ useEffect(() => {
               variant="subtitle1"
               sx={{ fontWeight: 500, color: "text.secondary" }}
             >
-              {displayItems.length} properties found
+              {data.totalCount} properties found
             </Typography>
             <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
               <FormControl size="small" sx={{ minWidth: 120 }}>
@@ -916,7 +923,7 @@ useEffect(() => {
           </Grid>
         ) : error ? (
           <Alert severity="error">{error}</Alert>
-        ) : displayItems.length === 0 ? (
+        ) : sortedItems.length === 0 ? (
           <Paper sx={{ p: 8, textAlign: "center", borderRadius: 3 }}>
             <Typography variant="h6" color="text.secondary">
               No properties found.
@@ -928,7 +935,7 @@ useEffect(() => {
         ) : (
           <>
             <Grid container spacing={viewMode === "grid" ? 3 : 2}>
-              {displayItems.map((property) => (
+              {sortedItems.map((property) => (
                 <Grid
                   key={property.id}
                   size={{

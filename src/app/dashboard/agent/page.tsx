@@ -22,7 +22,6 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import AddIcon from "@mui/icons-material/Add";
 import Link from "next/link";
 
-// Simple stat card
 const StatCard = ({
   title,
   value,
@@ -48,57 +47,75 @@ const StatCard = ({
 
 export default function AgentDashboardPage() {
   const { user, loading: authLoading } = useAuth();
-  const [stats, setStats] = useState<{
-    totalProperties?: number;
-    activeProperties?: number;
-    pendingProperties?: number;
-    totalEnquiries?: number;
-    recentEnquiries?: number;
-  } | null>(null);
+  const [stats, setStats] = useState({
+    totalProperties: 0,
+    activeProperties: 0,
+    pendingProperties: 0,
+    totalEnquiries: 0,
+  });
   const [recentProperties, setRecentProperties] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!user || !user.roles?.includes("Agent")) return;
+    if (!user || !user.roles?.includes("Agent") || !user.agentId) return;
 
-    const fetchAgentData = async () => {
+    const fetchDashboardData = async () => {
       try {
-        // Fetch agent's properties (first page, small size for recent overview)
-        const propertiesRes = await api.get("/api/Property/my-properties", {
+        // 1. Fetch recent 5 properties (already used)
+        const recentRes = await api.get("/api/Property/my-properties", {
           params: { page: 1, size: 5, sortBy: "CreatedAt", isDescending: true },
         });
-        const properties = propertiesRes.data.data;
-        setRecentProperties(properties.items);
+        const recentItems = recentRes.data.data.items;
+        setRecentProperties(recentItems);
 
-        // Fetch stats (you could have a dedicated stats endpoint, but we approximate)
+        // 2. Fetch total property count (use size=1 to get totalCount efficiently)
+        const totalRes = await api.get("/api/Property/my-properties", {
+          params: { page: 1, size: 1 },
+        });
+        const totalProperties = totalRes.data.data.totalCount;
+
+        // 3. Fetch active and pending counts
+        //    If your API supports filtering by status, use that; otherwise we'll filter client‑side (but that requires fetching all – not ideal).
+        //    Since your backend likely doesn't have a status filter, we'll fetch all properties with a large page size just for counts.
+        //    Alternatively, you can create a dedicated stats endpoint – here we'll approximate by fetching the first page with a large size (e.g., 1000) and counting.
         const allPropertiesRes = await api.get("/api/Property/my-properties", {
-          params: { page: 1, size: 1 }, // just to get total count
+          params: { page: 1, size: 1000 }, // assume agent won't have more than 1000 properties
         });
-        const totalProperties = allPropertiesRes.data.data.totalCount;
+        const allItems = allPropertiesRes.data.data.items;
+        const activeCount = allItems.filter(
+          (p: any) => p.status === "APPROVED",
+        ).length;
+        const pendingCount = allItems.filter(
+          (p: any) => p.status === "PENDING",
+        ).length;
 
-        // Count active and pending (simplified – you'd need an API for this, but we mock)
-        const activeRes = await api.get("/api/Property/my-properties", {
-          params: { page: 1, size: 1, status: "APPROVED" },
-        });
-        const pendingRes = await api.get("/api/Property/my-properties", {
-          params: { page: 1, size: 1, status: "PENDING" },
-        });
+        // 4. Fetch total enquiries count using agent ID from context
+        let totalEnquiries = 0;
+        if (user.agentId) {
+          const enqRes = await api.get(`/api/Enquiry/agent/${user.agentId}`, {
+            params: { page: 1, size: 1 },
+          });
+          totalEnquiries = enqRes.data.data.totalCount;
+        }
 
         setStats({
           totalProperties,
-          activeProperties: activeRes.data.data.totalCount,
-          pendingProperties: pendingRes.data.data.totalCount,
-          totalEnquiries: 0, // You'll need an enquiry endpoint that returns count per agent
-          recentEnquiries: 0,
+          activeProperties: activeCount,
+          pendingProperties: pendingCount,
+          totalEnquiries,
         });
-      } catch (err) {
-        console.error("Failed to load agent dashboard", err);
+      } catch (err: any) {
+        setError(
+          err.response?.data?.message || "Failed to load dashboard data",
+        );
+        console.error(err);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchAgentData();
+    fetchDashboardData();
   }, [user]);
 
   if (authLoading || loading) {
@@ -109,13 +126,17 @@ export default function AgentDashboardPage() {
     );
   }
 
+  if (error) {
+    return <Alert severity="error">{error}</Alert>;
+  }
+
   if (!user || !user.roles?.includes("Agent")) {
     return <Alert severity="error">Access denied. You are not an agent.</Alert>;
   }
 
   return (
-    <Container maxWidth="lg">
-      <Typography variant="h4" gutterBottom>
+    <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Typography variant="h4" gutterBottom sx={{ fontWeight: 700 }}>
         Agent Dashboard
       </Typography>
 
@@ -124,28 +145,28 @@ export default function AgentDashboardPage() {
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <StatCard
             title="Total Properties"
-            value={stats?.totalProperties ?? "-"}
+            value={stats.totalProperties}
             icon={<HomeWorkIcon fontSize="large" />}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <StatCard
             title="Active Listings"
-            value={stats?.activeProperties ?? "-"}
+            value={stats.activeProperties}
             icon={<VisibilityIcon fontSize="large" />}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <StatCard
             title="Pending Approval"
-            value={stats?.pendingProperties ?? "-"}
+            value={stats.pendingProperties}
             icon={<HomeWorkIcon fontSize="large" />}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <StatCard
             title="Total Enquiries"
-            value={stats?.totalEnquiries ?? "-"}
+            value={stats.totalEnquiries}
             icon={<EmailIcon fontSize="large" />}
           />
         </Grid>

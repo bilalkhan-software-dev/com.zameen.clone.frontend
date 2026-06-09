@@ -24,17 +24,24 @@ import {
   DialogActions,
   Button,
   Snackbar,
+  TextField,
+  InputAdornment,
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
+import SearchIcon from "@mui/icons-material/Search";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/axios";
 import { EnquiryResponse, PagedResult } from "@/lib/types";
 
 export default function AgentEnquiriesPage() {
-  const [agentId, setAgentId] = useState<number | null>(null);
+  const { user } = useAuth();
+  const agentId = user?.agentId;
+  const router = useRouter();
+
   const [enquiries, setEnquiries] =
     useState<PagedResult<EnquiryResponse> | null>(null);
-  const [loadingProfile, setLoadingProfile] = useState(true);
-  const [loadingEnquiries, setLoadingEnquiries] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [page, setPage] = useState(1);
   const pageSize = 10;
@@ -43,32 +50,14 @@ export default function AgentEnquiriesPage() {
     open: boolean;
     message: string;
     severity: "success" | "error";
-  }>({
-    open: false,
-    message: "",
-    severity: "success",
-  });
+  }>({ open: false, message: "", severity: "success" });
 
-  // Step 1 – Fetch agent's own profile to get the ID
-  useEffect(() => {
-    (async () => {
-      setLoadingProfile(true);
-      setError("");
-      try {
-        const res = await api.get("/api/Agent/me");
-        setAgentId(res.data.id); // adjust if the response is wrapped differently
-      } catch (err: any) {
-        setError(err.response?.data?.message || "Failed to load agent profile");
-      } finally {
-        setLoadingProfile(false);
-      }
-    })();
-  }, []);
+  // Property ID search state
+  const [propertyIdInput, setPropertyIdInput] = useState("");
 
-  // Step 2 – Fetch enquiries once agentId is known
   const fetchEnquiries = async () => {
     if (!agentId) return;
-    setLoadingEnquiries(true);
+    setLoading(true);
     setError("");
     try {
       const res = await api.get(`/api/Enquiry/agent/${agentId}`, {
@@ -78,7 +67,7 @@ export default function AgentEnquiriesPage() {
     } catch (err: any) {
       setError(err.response?.data?.message || "Failed to load enquiries");
     } finally {
-      setLoadingEnquiries(false);
+      setLoading(false);
     }
   };
 
@@ -86,7 +75,6 @@ export default function AgentEnquiriesPage() {
     fetchEnquiries();
   }, [agentId, page]);
 
-  // Delete an enquiry
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
@@ -107,11 +95,28 @@ export default function AgentEnquiriesPage() {
     }
   };
 
-  if (loadingProfile) {
+  // Navigate to property enquiries page
+  const handlePropertyIdSubmit = () => {
+    const id = parseInt(propertyIdInput, 10);
+    if (!isNaN(id) && id > 0) {
+      router.push(`/dashboard/agent/enquiries/${id}`);
+      setPropertyIdInput("");
+    }
+  };
+
+  const handlePropertyIdKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handlePropertyIdSubmit();
+    }
+  };
+
+  if (!agentId) {
     return (
-      <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-        <CircularProgress />
-      </Box>
+      <Container maxWidth="lg" sx={{ py: 4 }}>
+        <Alert severity="warning">
+          Agent profile not available. Please log in again.
+        </Alert>
+      </Container>
     );
   }
 
@@ -121,13 +126,44 @@ export default function AgentEnquiriesPage() {
         My Enquiries
       </Typography>
 
+      {/* Property ID quick search */}
+      <Box sx={{ display: "flex", gap: 1, mb: 3, alignItems: "center" }}>
+        <TextField
+          size="small"
+          placeholder="Enter property ID"
+          value={propertyIdInput}
+          onChange={(e) => {
+            const val = e.target.value;
+            if (/^\d*$/.test(val)) setPropertyIdInput(val);
+          }}
+          onKeyDown={handlePropertyIdKeyDown}
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            },
+          }}
+          sx={{ width: 200 }}
+        />
+        <Button
+          variant="contained"
+          onClick={handlePropertyIdSubmit}
+          sx={{ textTransform: "none" }}
+        >
+          Go
+        </Button>
+      </Box>
+
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
         </Alert>
       )}
 
-      {loadingEnquiries ? (
+      {loading ? (
         <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
           <CircularProgress />
         </Box>
@@ -145,7 +181,6 @@ export default function AgentEnquiriesPage() {
                 <TableCell>Message</TableCell>
                 <TableCell>Type</TableCell>
                 <TableCell>City</TableCell>
-                <TableCell>CNIC</TableCell>
                 <TableCell>Date</TableCell>
                 <TableCell align="center">Actions</TableCell>
               </TableRow>
@@ -158,7 +193,7 @@ export default function AgentEnquiriesPage() {
                       label={`#${enq.propertyId}`}
                       size="small"
                       component="a"
-                      href={`/properties/${enq.propertyId}`}
+                      href={`/dashboard/agent/enquiries/${enq.propertyId}`}
                       clickable
                     />
                   </TableCell>
@@ -185,7 +220,6 @@ export default function AgentEnquiriesPage() {
                     <Chip label={enq.enquiryType} size="small" />
                   </TableCell>
                   <TableCell>{enq.city || "-"}</TableCell>
-                  <TableCell>{enq.cnic || "-"}</TableCell>
                   <TableCell>
                     {new Date(enq.createdAt).toLocaleString()}
                   </TableCell>
@@ -228,7 +262,6 @@ export default function AgentEnquiriesPage() {
         </DialogActions>
       </Dialog>
 
-      {/* Snackbar for feedback */}
       <Snackbar
         open={snackbar.open}
         autoHideDuration={4000}

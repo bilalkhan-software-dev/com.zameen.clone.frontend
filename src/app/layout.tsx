@@ -1,6 +1,7 @@
 import { Plus_Jakarta_Sans } from "next/font/google";
 import { AuthProvider } from "@/context/AuthContext";
 import { SettingsProvider } from "@/context/SettingsContext";
+import { AppRouterCacheProvider } from '@mui/material-nextjs/v15-appRouter';
 import ThemeWrapper from "./ThemeWrapper";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -23,11 +24,13 @@ export default function RootLayout({
   return (
     <html lang="en" className={jakarta.className}>
       <body>
+          <AppRouterCacheProvider>
         <ThemeWrapper>
           <SettingsProvider>
             <AuthProvider>{children}</AuthProvider>
           </SettingsProvider>
         </ThemeWrapper>
+        </AppRouterCacheProvider>
       </body>
     </html>
   );
