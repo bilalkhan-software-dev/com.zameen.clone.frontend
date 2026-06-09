@@ -154,4 +154,6 @@ export interface EnquiryResponse {
   city?: string;
   enquiryType?: string;
   monthlySalary?: string;
+  createdAt: string;
+  updatedAt: string;
 }
